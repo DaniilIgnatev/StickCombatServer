@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-var WebSocketClient = require('websocket').client
+/*var WebSocketClient = require('websocket').client
 
 const readline = require('readline');
 
@@ -126,4 +126,5 @@ function requestSelect(connection,array){
     connection.sendUTF(query)
 }
 
-client.connect('ws://95.104.217.68:8080/', 'echo-protocol')
+client.connect('ws://95.104.217.68:8080/', 'echo-protocol')*/
+
