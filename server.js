@@ -39,25 +39,54 @@ wsServer.on('request', function (request) {
         console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.')
     })
 
+    lobbyName = null
+
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
             console.debug('Received Message: ' + message.utf8Data);
 
-            var csAnswer = null
             var csRequest = JSON.parse(message.utf8Data)
+            var csAnswer = undefined
 
-            csAnswer = HandleRequest_CreateLobby(csRequest, connection)
-            csAnswer = HandleRequest_JoinLobby(csRequest, connection)
+            if (lobbyName == null) {
+                lobbyName = csRequest.body.name
+
+                feedbackClient(connection, undefined, HandleRequest_CreateLobby, csRequest, undefined)
+
+                let lobby = massLobby.find((value) => { return value.Name == lobbyName })
+                if (lobby != undefined) {
+                    feedbackClient(connection, lobby.socket1, HandleRequest_JoinLobby, csRequest, lobby)
+                }
+            }
+            else {
+                let lobby = massLobby.find((value) => { return value.Name == lobbyName })
 
 
-
-            if (csAnswer != null) {
-                connection.sendUTF(csAnswer)
             }
         }
     })
 })
 
+
+
+///Обработка запроса клиента с  непосредственным ответом
+function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
+    answer = requestHandler(requestJSON, socket1, lobby)
+    if (answer != undefined) {
+        socket1.sendUTF(answer)
+        if (socket2 != undefined) {
+            socket2.sendUTF(answer)
+        }
+        else
+            if (lobby != undefined) {
+                lobby.Socket1.sendUTF(answer)
+            }
+    }
+}
+
+const fighterWidth = 100.0
+
+const fighterHeight = 150.0
 
 /// Обслуживаемые лобби
 var massLobby = []
@@ -69,72 +98,71 @@ var LobbyStatusEnum = Object.freeze({ "refused": 0, "casting": 1, "fight": 2, "p
 //REGION: ОБРАБОТКА ЗАПРОСОВ КЛИЕНТОВ  
 
 ///Обработка запроса на создание лобби
-function HandleRequest_CreateLobby(parsed, connection) {
+function HandleRequest_CreateLobby(parsed, connection, lobby) {
+    if (lobby != undefined) {
+        return ApproveStatusJSON(LobbyStatusEnum.refused)
+    }
+
     if (parsed.head.type == 'createLobby') {
         var name = parsed.body.name // Название лобби
         var password = parsed.body.password // Пароль к лобби
 
-        var Lobby = massLobby.find((v) => { v.Name == name })
-        if (Lobby == undefined) {
-            var socket1 = connection
-            var socket2 = null
 
-            // Дескриптор бойца 1
-            var descriptor1 = {
-                x: 20.0,
-                y: 0.0,
-                isOn: false,
-                hp: 100
-            }
-            // Дескриптор бойца 2
-            var descriptor2 = {
-                x: 150.0,
-                y: 0.0,
-                isOn: false,
-                hp: 100
-            }
+        var socket1 = connection
+        var socket2 = null
 
-            var newLobby = {
-                Status: LobbyStatusEnum.casting,
-                Name: name,
-                Password: password,
-                Socket1: socket1,
-                Socket2: socket2,
-                Descriptor1: descriptor1,
-                Descriptor2: descriptor2
-            }
-
-            // Записываем в массив наш объект
-            massLobby.push(newLobby)
-            //Отправить статус игры "refused"
-
+        // Дескриптор бойца 1
+        var descriptor1 = {
+            x: -130.0,
+            y: 0.0,
+            isOn: false,
+            hp: 100
         }
-        else {
-            //Отправить статус игры "casting"
-
+        // Дескриптор бойца 2
+        var descriptor2 = {
+            x: 130.0,
+            y: 0.0,
+            isOn: false,
+            hp: 100
         }
+
+        var newLobby = {
+            Status: LobbyStatusEnum.casting,
+            Name: name,
+            Password: password,
+            Socket1: socket1,
+            Socket2: socket2,
+            Descriptor1: descriptor1,
+            Descriptor2: descriptor2
+        }
+
+        // Записываем в массив наш объект
+        massLobby.push(newLobby)
+        return ApproveStatusJSON(LobbyStatusEnum.casting)
     }
 }
 
 
 ///Обработка запроса на присоединение к лобби
-function HandleRequest_JoinLobby(parsed, connection) {
+function HandleRequest_JoinLobby(parsed, connection, lobby) {
     if (parsed.head.type == "joinLobby") {
-        var name = parsed.body.name
         var password = parsed.body.password
 
-        var Lobby = massLobby.find((value) => { return value.Name == name })
+        if (lobby.Password == password) {
+            lobby.Socket2 = connection
+            lobby.Status = LobbyStatusEnum.fight
 
-        if (Lobby != undefined && Lobby.Password == password) {
-            Lobby.Socket2 = connection
-            Lobby.Status = LobbyStatusEnum.fight
+            return ApproveStatusJSON(LobbyStatusEnum.fight)
+        }
+        else {
+            return ApproveStatusJSON(LobbyStatusEnum.refused)
         }
     }
 }
 
 
 ///Обработка запроса на сдачу
-function HandleRequest_Surrender(parsed) {
+function HandleRequest_Surrender(parsed, lobby) {
     if (parsed.head.type == "surrender") {
 
     }
@@ -142,7 +170,7 @@ function HandleRequest_Surrender(parsed) {
 
 
 ///Обработка запроса на паузу
-function HandleRequest_Pause(parsed) {
+function HandleRequest_Pause(parsed, lobby) {
     if (parsed.head.type == "pause") {
 
     }
@@ -150,7 +178,7 @@ function HandleRequest_Pause(parsed) {
 
 
 ///Обработка запроса на удар
-function HandleRequest_Strike(parsed) {
+function HandleRequest_Strike(parsed, lobby) {
     if (parsed.head.type == "strike") {
         var X = parsed.body.x
         var Y = parsed.body.y
@@ -161,18 +189,90 @@ function HandleRequest_Strike(parsed) {
 
 
 ///Обработка запроса на горизонтальное перемещение
-function HandleRequest_HorizontalMove(parsed) {
+function HandleRequest_HorizontalMove(parsed, lobby) {
     if (parsed.head.type == "horizontalMove") {
-        var from = parsed.body.from
-        var to = parsed.body.to
-        var by = parsed.body.by
+        let from = parsed.body.from
+        let by = parsed.body.by
+
+
+
     }
 }
 
 
 ///Обработка запроса на блок удара
-function HandleRequest_Block(parsed) {
+function HandleRequest_Block(parsed, lobby) {
     if (parsed.head.type == "block") {
         var isOn = parsed.body.isOn
     }
+}
+
+
+//REGION: JSON ОТВЕТЫ КЛИЕНТАМ
+
+function ApproveStatusJSON(statusCode) {
+    let answer = {
+        head: {
+            type: "status"
+        },
+        body: {
+            code: statusCode,
+            description: ""
+        }
+    }
+    let json = JSON.stringify(answer)
+    return json
+}
+
+
+function ApproveStrikeJSON(strikeAction, endHp) {
+    let answer = {
+        head: {
+            id: action.head.id,
+            type: "strikeApprove"
+        },
+        body: {
+            x: action.body.x,
+            x: strikeAction.body.x,
+            y: strikeAction.body.y,
+            dx: strikeAction.body.dx,
+            dy: strikeAction.body.dy,
+            endHP: endHp
+        }
+    }
+    let json = JSON.stringify(answer)
+    return json
+}
+
+
+function ApproveHorizontalMoveJSON(id, from, to) {
+    let by = to - from
+    let answer = {
+        head: {
+            id: id,
+            type: "horizontalMoveApprove"
+        },
+        body: {
+            from: from,
+            to: to,
+            by: by
+        }
+    }
+    let json = JSON.stringify(answer)
+    return json
+}
+
+
+function ApproveBlockApproveJSON(blockAction, isOn) {
+    let answer = {
+        head: {
+            id: blockAction.head.id,
+            type: "blockApprove"
+        },
+        body: {
+            isOn: isOn
+        }
+    }
+    let json = JSON.stringify(answer)
+    return json
 }
