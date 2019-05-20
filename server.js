@@ -21,7 +21,7 @@ function originIsAllowed(origin) {
     return true;
 }
 
-var connections = []
+var connection_IDAdder = 0
 
 wsServer.on('request', function (request) {
     if (!originIsAllowed(request.origin)) {
@@ -32,15 +32,30 @@ wsServer.on('request', function (request) {
     }
 
     var connection = request.accept(acceptedProtocol = null, allowedOrigin = request.origin)
-    connections.push(connection)
-    console.log((new Date()) + ' Connection accepted.')
+    connection.id = connection_IDAdder
+    connection_IDAdder += 1
+
+    console.log((new Date()) + ' Connection accepted. Id = ' + connection.id)
 
     connection.on('close', function (reasonCode, description) {
-        console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.')
+        removableLobby = massLobby.find((value) => {
+            return (value.Socket1.id == connection.id || value.Socket2.id == connection.id)
+        })
+
+        if (removableLobby != undefined) {
+            if (removableLobby.Socket1 != undefined)
+                removableLobby.Socket1.close()
+
+            if (removableLobby.Socket2 != undefined)
+                removableLobby.Socket2.close()
+
+            console.log((new Date()) + " Removed lobby: " + removableLobby.Name)
+            massLobby = massLobby.filter((value) => { value.Name != removableLobby.Name })
+        }
     })
 
     lobbyName = null
-
+    //потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
             console.debug('Received Message: ' + message.utf8Data);
@@ -102,7 +117,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
     if (lobby != undefined) {
         return ApproveStatusJSON(LobbyStatusEnum.refused)
     }
-
+//добавить проверку на повтор имени
     if (parsed.head.type == 'createLobby') {
         var name = parsed.body.name // Название лобби
         var password = parsed.body.password // Пароль к лобби
