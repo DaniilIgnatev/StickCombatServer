@@ -17,7 +17,7 @@ wsServer = new WebSocketServer({
 
 
 function originIsAllowed(origin) {
-    // put logic here to detect whether the specified origin is allowed.
+    //Ограничение по ip клиента отсутствует
     return true;
 }
 
@@ -76,7 +76,10 @@ wsServer.on('request', function (request) {
             else {
                 let lobby = massLobby.find((value) => { return value.Name == lobbyName })
 
-
+                //тестировать
+                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Pause, csRequest, lobby)
+                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Surrender, csRequest, lobby)
+                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
             }
         }
     })
@@ -88,11 +91,11 @@ wsServer.on('request', function (request) {
 function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
     answer = requestHandler(requestJSON, socket1, lobby)
     if (answer != undefined) {
-        socket1.sendUTF(answer)
+        socket1.sendUTF(answer)//оповещение создающего (или подключающегося в исключительном случае)
         if (socket2 != undefined) {
-            socket2.sendUTF(answer)
+            socket2.sendUTF(answer)//оповещение подключающегося
         }
-        else
+        else//исключительный случай для подключаещегося (оповещение создающего)
             if (lobby != undefined) {
                 lobby.Socket1.sendUTF(answer)
             }
@@ -115,26 +118,31 @@ var LobbyStatusEnum = Object.freeze({ "refused": 0, "casting": 1, "fight": 2, "p
 ///Обработка запроса на создание лобби
 function HandleRequest_CreateLobby(parsed, connection, lobby) {
     if (lobby != undefined) {
-        return ApproveStatusJSON(LobbyStatusEnum.refused)
+        return ComposeAnswer_Status(LobbyStatusEnum.refused)
     }
-//добавить проверку на повтор имени
+
     if (parsed.head.type == 'createLobby') {
         var name = parsed.body.name // Название лобби
         var password = parsed.body.password // Пароль к лобби
 
+        //Проверка на повтор имени
+        let lobby = massLobby.find((value) => { return value.Name == lobbyName })
+        if (lobby != undefined) {
+            return ComposeAnswer_Status(LobbyStatusEnum.refused)
+        }
 
         var socket1 = connection
         var socket2 = null
 
         // Дескриптор бойца 1
-        var descriptor1 = {
+        var fighter1 = {
             x: -130.0,
             y: 0.0,
             isOn: false,
             hp: 100
         }
         // Дескриптор бойца 2
-        var descriptor2 = {
+        var fighter2 = {
             x: 130.0,
             y: 0.0,
             isOn: false,
@@ -147,13 +155,13 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
             Password: password,
             Socket1: socket1,
             Socket2: socket2,
-            Descriptor1: descriptor1,
-            Descriptor2: descriptor2
+            Descriptor1: fighter1,
+            Descriptor2: fighter2
         }
 
         // Записываем в массив наш объект
         massLobby.push(newLobby)
-        return ApproveStatusJSON(LobbyStatusEnum.casting)
+        return ComposeAnswer_Status(LobbyStatusEnum.casting)
     }
 }
 
@@ -167,33 +175,40 @@ function HandleRequest_JoinLobby(parsed, connection, lobby) {
             lobby.Socket2 = connection
             lobby.Status = LobbyStatusEnum.fight
 
-            return ApproveStatusJSON(LobbyStatusEnum.fight)
+            return ComposeAnswer_Status(LobbyStatusEnum.fight)
         }
         else {
-            return ApproveStatusJSON(LobbyStatusEnum.refused)
+            return ComposeAnswer_Status(LobbyStatusEnum.refused)
         }
     }
 }
 
 
+//тестировать
 ///Обработка запроса на сдачу
-function HandleRequest_Surrender(parsed, lobby) {
+function HandleRequest_Surrender(parsed, connection, lobby) {
     if (parsed.head.type == "surrender") {
-
+        if (lobby.Status == LobbyStatusEnum.fight) {
+            return ComposeAnswer_Status(LobbyStatusEnum.finished)
+        }
     }
 }
 
 
+//тестировать
 ///Обработка запроса на паузу
-function HandleRequest_Pause(parsed, lobby) {
+function HandleRequest_Pause(parsed, connection, lobby) {
     if (parsed.head.type == "pause") {
-
+        if (lobby.Status == LobbyStatusEnum.fight) {
+            setTimeout(() => { return ComposeAnswer_Status(LobbyStatusEnum.fight) }, 30 * 1000000)
+            return ComposeAnswer_Status(LobbyStatusEnum.pause)
+        }
     }
 }
 
 
 ///Обработка запроса на удар
-function HandleRequest_Strike(parsed, lobby) {
+function HandleRequest_Strike(parsed, connection, lobby) {
     if (parsed.head.type == "strike") {
         var X = parsed.body.x
         var Y = parsed.body.y
@@ -204,28 +219,35 @@ function HandleRequest_Strike(parsed, lobby) {
 
 
 ///Обработка запроса на горизонтальное перемещение
-function HandleRequest_HorizontalMove(parsed, lobby) {
+function HandleRequest_HorizontalMove(parsed, connection, lobby) {
     if (parsed.head.type == "horizontalMove") {
         let from = parsed.body.from
         let by = parsed.body.by
 
-
+        //клиент присылает by, в замен получает to
 
     }
 }
 
 
+//тестировать
 ///Обработка запроса на блок удара
-function HandleRequest_Block(parsed, lobby) {
+function HandleRequest_Block(parsed, connection, lobby) {
     if (parsed.head.type == "block") {
-        var isOn = parsed.body.isOn
+        let fighterID = parsed.type.id
+        let isOn = parsed.body.isOn
+
+        if ((fighterID == 0 && lobby.fighter1.isOn != isOn) ||
+            (fighterID == 1 && lobby.fighter2.isOn != isOn)) {
+            return ComposeAnswer_Block(parsed, isOn)
+        }
     }
 }
 
 
 //REGION: JSON ОТВЕТЫ КЛИЕНТАМ
 
-function ApproveStatusJSON(statusCode) {
+function ComposeAnswer_Status(statusCode) {
     let answer = {
         head: {
             type: "status"
@@ -240,7 +262,7 @@ function ApproveStatusJSON(statusCode) {
 }
 
 
-function ApproveStrikeJSON(strikeAction, endHp) {
+function ComposeAnswer_Strike(strikeAction, endHp) {
     let answer = {
         head: {
             id: action.head.id,
@@ -260,7 +282,7 @@ function ApproveStrikeJSON(strikeAction, endHp) {
 }
 
 
-function ApproveHorizontalMoveJSON(id, from, to) {
+function ComposeAnswer_Move(id, from, to) {
     let by = to - from
     let answer = {
         head: {
@@ -278,7 +300,7 @@ function ApproveHorizontalMoveJSON(id, from, to) {
 }
 
 
-function ApproveBlockApproveJSON(blockAction, isOn) {
+function ComposeAnswer_Block(blockAction, isOn) {
     let answer = {
         head: {
             id: blockAction.head.id,
