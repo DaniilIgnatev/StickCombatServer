@@ -21,8 +21,12 @@ function originIsAllowed(origin) {
     return true;
 }
 
+
+///UID подключения
 var connection_IDAdder = 0
 
+
+///Логика обработки входящих запросов на подключение
 wsServer.on('request', function (request) {
     if (!originIsAllowed(request.origin)) {
         // Make sure we only accept requests from an allowed origin
@@ -37,7 +41,9 @@ wsServer.on('request', function (request) {
 
     console.log((new Date()) + ' Connection accepted. Id = ' + connection.id)
 
+    ///Логика обработки закрытия соединения
     connection.on('close', function (reasonCode, description) {
+        //потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
         removableLobby = massLobby.find((value) => {
             return (value.Socket1.id == connection.id || value.Socket2.id == connection.id)
         })
@@ -55,7 +61,8 @@ wsServer.on('request', function (request) {
     })
 
     lobbyName = null
-    //потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
+    
+    ///Логика обработки входящих сообщений
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
             console.debug('Received Message: ' + message.utf8Data);
@@ -80,14 +87,14 @@ wsServer.on('request', function (request) {
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Pause, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Surrender, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
+                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_HorizontalMove, csRequest, lobby)
             }
         }
     })
 })
 
 
-
-///Обработка запроса клиента с  непосредственным ответом
+///Скрипт обработки запроса клиента с  непосредственным ответом
 function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
     answer = requestHandler(requestJSON, socket1, lobby)
     if (answer != undefined) {
@@ -102,9 +109,6 @@ function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
     }
 }
 
-const fighterWidth = 100.0
-
-const fighterHeight = 150.0
 
 /// Обслуживаемые лобби
 var massLobby = []
@@ -155,8 +159,8 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
             Password: password,
             Socket1: socket1,
             Socket2: socket2,
-            Descriptor1: fighter1,
-            Descriptor2: fighter2
+            Fighter1: fighter1,
+            Fighter2: fighter2
         }
 
         // Записываем в массив наш объект
@@ -218,14 +222,70 @@ function HandleRequest_Strike(parsed, connection, lobby) {
 }
 
 
-///Обработка запроса на горизонтальное перемещение
+///Занимаемое пространство моделью бойца по ширине на сцене
+const fighterWidth = 100.0
+function halfFighterWidth(){
+    return fighterWidth / 2
+}
+///Занимаемое пространство моделью бойца по высоте на сцене
+const fighterHeight = 150.0
+
+///Координата левой границы сцены
+const sceneLeftBorder = -333.5
+///Координата правой границы сцены
+const sceneRightBorder = 333.5
+
+///Дескриптор, описывающий границы бойца
+function getFighterBordersDescriptor(centerX){
+    let halfW = halfFighterWidth()
+
+    let leftX = centerX - halfW
+    let rightX = centerX + halfW
+    let descriptor = {
+        centerX: centerX,
+        leftX: leftX, 
+        rightX: rightX
+    }
+
+    return descriptor
+}
+
+
+///Ограничение координат бойца сценой
+function constrainFighterInScene(X,byX){
+    var finalX = X + byX
+    FleftX = X - halfFighterWidth()
+    FrightX = X + halfFighterWidth()
+
+    if (FleftX + byX < sceneLeftBorder){
+        finalX = sceneLeftBorder + halfFighterWidth()
+    }
+    if (FrightX + byX > sceneRightBorder){
+        finalX = sceneRightBorder - halfFighterWidth()
+    }
+
+    return finalX
+}
+
+
+//тестировать
+///Обработка запроса на горизонтальное перемещениеж;клиент присылает by, в замен получает to
 function HandleRequest_HorizontalMove(parsed, connection, lobby) {
     if (parsed.head.type == "horizontalMove") {
         let from = parsed.body.from
         let by = parsed.body.by
 
-        //клиент присылает by, в замен получает to
 
+        var x = lobby.Fighter1.x
+        if (parsed.head.id == 1){
+            x = lobby.Fighter2.x
+        }
+
+        let descriptor = getFighterBordersDescriptor(x)
+
+        let finalX = constrainFighterInScene(x,by)
+
+        return ComposeAnswer_Move(parsed.head.id,x,finalX)
     }
 }
 
@@ -300,6 +360,7 @@ function ComposeAnswer_Move(id, from, to) {
 }
 
 
+//тестировать
 function ComposeAnswer_Block(blockAction, isOn) {
     let answer = {
         head: {
