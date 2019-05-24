@@ -214,10 +214,7 @@ function HandleRequest_Pause(parsed, connection, lobby) {
 ///Обработка запроса на удар
 function HandleRequest_Strike(parsed, connection, lobby) {
     if (parsed.head.type == "strike") {
-        var X = parsed.body.x
-        var Y = parsed.body.y
-        var dx = parsed.body.dx
-        var dy = parsed.body.dy
+        
     }
 }
 
@@ -272,7 +269,6 @@ function constrainFighterInScene(X,byX){
 ///Обработка запроса на горизонтальное перемещениеж;клиент присылает by, в замен получает to
 function HandleRequest_HorizontalMove(parsed, connection, lobby) {
     if (parsed.head.type == "horizontalMove") {
-        let from = parsed.body.from
         let by = parsed.body.by
 
 
@@ -284,6 +280,14 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
         let descriptor = getFighterBordersDescriptor(x)
 
         let finalX = constrainFighterInScene(x,by)
+
+        
+        if (parsed.head.id == 0){
+            lobby.Fighter1.x = finalX
+        }
+        else{
+            lobby.Fighter2.x = finalX
+        }
 
         return ComposeAnswer_Move(parsed.head.id,x,finalX)
     }
@@ -322,6 +326,7 @@ function ComposeAnswer_Status(statusCode) {
 }
 
 
+//- изменился протокол
 function ComposeAnswer_Strike(strikeAction, endHp) {
     let answer = {
         head: {
