@@ -214,13 +214,26 @@ function HandleRequest_Pause(parsed, connection, lobby) {
 ///Обработка запроса на удар
 function HandleRequest_Strike(parsed, connection, lobby) {
     if (parsed.head.type == "strike") {
-        
+        let id = parsed.head.id
+
+        let direction = parsed.body.direction
+        let impact = parsed.body.impact
+
+        switch (impact){
+            case 0:
+                break
+            case 1:
+                break
+            case 2:
+                break
+        }
     }
 }
 
 
 ///Занимаемое пространство моделью бойца по ширине на сцене
 const fighterWidth = 100.0
+
 function halfFighterWidth(){
     return fighterWidth / 2
 }
@@ -229,8 +242,10 @@ const fighterHeight = 150.0
 
 ///Координата левой границы сцены
 const sceneLeftBorder = -333.5
+
 ///Координата правой границы сцены
 const sceneRightBorder = 333.5
+
 
 ///Дескриптор, описывающий границы бойца
 function getFighterBordersDescriptor(centerX){
