@@ -3,11 +3,11 @@ var http = require('http')
 
 
 var server = http.createServer(function (request, response) {
-    console.log((new Date()) + ' Received request for ' + request.url)
+    console.log((new Date()) + '; Received request for ' + request.url)
     response.writeHead(404)
     response.end()
 })
-server.listen(8080, () => console.log((new Date()) + ' Server is listening on port 8080'))
+server.listen(8080, () => console.log((new Date()) + '; Server is listening on port 8080'))
 
 
 wsServer = new WebSocketServer({
@@ -31,7 +31,7 @@ wsServer.on('request', function (request) {
     if (!originIsAllowed(request.origin)) {
         // Make sure we only accept requests from an allowed origin
         request.reject()
-        console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.')
+        console.log((new Date()) + '; Connection from origin ' + request.origin + ' rejected.')
         return
     }
 
@@ -39,7 +39,7 @@ wsServer.on('request', function (request) {
     connection.id = connection_IDAdder
     connection_IDAdder += 1
 
-    console.log((new Date()) + ' Connection accepted. Id = ' + connection.id)
+    console.log((new Date()) + '; Connection accepted. Id = ' + connection.id)
 
     ///Логика обработки закрытия соединения
     connection.on('close', function (reasonCode, description) {
@@ -55,17 +55,17 @@ wsServer.on('request', function (request) {
             if (removableLobby.Socket2 != undefined)
                 removableLobby.Socket2.close()
 
-            console.log((new Date()) + " Removed lobby: " + removableLobby.Name)
+            console.log((new Date()) + "; Removed lobby: " + removableLobby.Name)
             massLobby = massLobby.filter((value) => { value.Name != removableLobby.Name })
         }
     })
 
     lobbyName = null
-    
+
     ///Логика обработки входящих сообщений
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
-            console.debug('Received Message: ' + message.utf8Data);
+            console.log(new Date() + '; Received Message: ' + message.utf8Data)
 
             var csRequest = JSON.parse(message.utf8Data)
             var csAnswer = undefined
@@ -105,6 +105,7 @@ function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
         else//исключительный случай для подключаещегося (оповещение создающего)
             if (lobby != undefined) {
                 lobby.Socket1.sendUTF(answer)
+                console.log(new Date() + '; Sent Message: ' + message.utf8Data)
             }
     }
 }
@@ -114,10 +115,25 @@ function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
 var massLobby = []
 
 /// Перечесление статуса лобби
-var LobbyStatusEnum = Object.freeze({ "refused": 0, "casting": 1, "fight": 2, "pause": 3, "finished": 4 })
+const LobbyStatusEnum = Object.freeze({ "refused": 0, "casting": 1, "fight": 2, "pause": 3, "finished": 4 })
 
 
 //REGION: ОБРАБОТКА ЗАПРОСОВ КЛИЕНТОВ  
+
+///Занимаемое пространство моделью бойца по ширине на сцене
+const fighterWidth = 100.0
+
+function halfFighterWidth() {
+    return fighterWidth / 2
+}
+///Занимаемое пространство моделью бойца по высоте на сцене
+const fighterHeight = 150.0
+
+///Координата левой границы сцены
+const sceneLeftBorder = -333.5
+
+///Координата правой границы сцены
+const sceneRightBorder = 333.5
 
 ///Обработка запроса на создание лобби
 function HandleRequest_CreateLobby(parsed, connection, lobby) {
@@ -211,51 +227,102 @@ function HandleRequest_Pause(parsed, connection, lobby) {
 }
 
 
+const StrikeDirectionEnum = Object.freeze({ "up": 0, "straight": 1, "down": 2 })
+
+
+///Определение расстояния между атакующим и защищающимся
+///fighterSender -- кто бьет
+///fighterReciever -- кого бьют
+///directionView -- направление взгляда атакующего
+function evaluateStrikeDistance(fighterSender, fighterReciever, directionView) {
+    var distance = undefined
+
+    //проверка на совпадение взгляда и получающего удар
+    //(проверить баг при коллизии моделей, может быть рассинхрон когда sk сам передвинет модели бойцов)
+    if (directionView == 0) {
+        let senderLeftX = fighterSender.X - halfFighterWidth()
+        let recieverRightX = fighterReciever.X + halfFighterWidth()
+        //тот кто бьет должен быть справа
+        if (senderLeftX > recieverRightX) {
+            distance = senderLeftX - recieverRightX
+        }
+    }
+    else {
+        let senderRightX = fighterSender.X + halfFighterWidth()
+        let recieverLeftX = fighterReciever.X - halfFighterWidth()
+        //тот кто бьет должен быть слева
+        if (senderRightX < recieverLeftX) {
+            distance = recieverRightX - senderRightX
+        }
+    }
+
+    return distance
+}
+
+
+///Обработка удара по его характеристикам
+///fighterSender -- кто бьет
+///fighterReciever -- кого бьют
+///directionView -- направление взгляда атакующего
+///directionStrike -- направление удара по вертикали
+///strikeRange -- максимальная дистанция удара
+///strikeStrength -- максимальная сила удара
+function processStrike(fighterSender, fighterReciever, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
+
+    //расстояние между атакующим и защищающимся
+    let distance = evaluateStrikeDistance(fighterSender, fighterReciever, directionView)
+
+    if (distance != undefined) {
+
+    }
+}
+
+
 ///Обработка запроса на удар
 function HandleRequest_Strike(parsed, connection, lobby) {
     if (parsed.head.type == "strike") {
         let id = parsed.head.id
+        let directionView = parsed.body.direction
 
-        let direction = parsed.body.direction
+        var fSender = lobby.Fighter1
+        var fReciever = lobby.Fighter2
+        if (id == 1) {
+            fSender = lobby.Fighter2
+            fReciever = lobby.Fighter1
+        }
+
+
+
         let impact = parsed.body.impact
 
-        switch (impact){
+        switch (impact) {
             case 0:
+                //удар рукой
+                processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 5)
                 break
             case 1:
+                //удар левой ногой вверх
+                processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 10)
                 break
             case 2:
+                //удар правой ногой прямо
+                processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.straight, 12, 5)
                 break
         }
     }
 }
 
 
-///Занимаемое пространство моделью бойца по ширине на сцене
-const fighterWidth = 100.0
-
-function halfFighterWidth(){
-    return fighterWidth / 2
-}
-///Занимаемое пространство моделью бойца по высоте на сцене
-const fighterHeight = 150.0
-
-///Координата левой границы сцены
-const sceneLeftBorder = -333.5
-
-///Координата правой границы сцены
-const sceneRightBorder = 333.5
-
 
 ///Дескриптор, описывающий границы бойца
-function getFighterBordersDescriptor(centerX){
+function getFighterBordersDescriptor(centerX) {
     let halfW = halfFighterWidth()
 
     let leftX = centerX - halfW
     let rightX = centerX + halfW
     let descriptor = {
         centerX: centerX,
-        leftX: leftX, 
+        leftX: leftX,
         rightX: rightX
     }
 
@@ -264,15 +331,15 @@ function getFighterBordersDescriptor(centerX){
 
 
 ///Ограничение координат бойца сценой
-function constrainFighterInScene(X,byX){
+function constrainFighterInScene(X, byX) {
     var finalX = X + byX
     FleftX = X - halfFighterWidth()
     FrightX = X + halfFighterWidth()
 
-    if (FleftX + byX < sceneLeftBorder){
+    if (FleftX + byX < sceneLeftBorder) {
         finalX = sceneLeftBorder + halfFighterWidth()
     }
-    if (FrightX + byX > sceneRightBorder){
+    if (FrightX + byX > sceneRightBorder) {
         finalX = sceneRightBorder - halfFighterWidth()
     }
 
@@ -288,23 +355,23 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
 
 
         var x = lobby.Fighter1.x
-        if (parsed.head.id == 1){
+        if (parsed.head.id == 1) {
             x = lobby.Fighter2.x
         }
 
         let descriptor = getFighterBordersDescriptor(x)
 
-        let finalX = constrainFighterInScene(x,by)
+        let finalX = constrainFighterInScene(x, by)
 
-        
-        if (parsed.head.id == 0){
+
+        if (parsed.head.id == 0) {
             lobby.Fighter1.x = finalX
         }
-        else{
+        else {
             lobby.Fighter2.x = finalX
         }
 
-        return ComposeAnswer_Move(parsed.head.id,x,finalX)
+        return ComposeAnswer_Move(parsed.head.id, x, finalX)
     }
 }
 
@@ -341,19 +408,18 @@ function ComposeAnswer_Status(statusCode) {
 }
 
 
-//- изменился протокол
-function ComposeAnswer_Strike(strikeAction, endHp) {
+
+function ComposeAnswer_Strike(FighterRecieverID,vectorStartPoint, vectorEndPoint, endHp) {
     let answer = {
         head: {
-            id: action.head.id,
+            id: FighterRecieverID,
             type: "strikeApprove"
         },
         body: {
-            x: action.body.x,
-            x: strikeAction.body.x,
-            y: strikeAction.body.y,
-            dx: strikeAction.body.dx,
-            dy: strikeAction.body.dy,
+            x: vectorStartPoint.x,
+            y: vectorStartPoint.y,
+            dx: vectorEndPoint.x,
+            dy: vectorEndPoint.y,
             endHP: endHp
         }
     }
