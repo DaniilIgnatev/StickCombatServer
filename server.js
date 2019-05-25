@@ -234,7 +234,7 @@ const StrikeDirectionEnum = Object.freeze({ "up": 0, "straight": 1, "down": 2 })
 ///fighterSender -- кто бьет
 ///fighterReciever -- кого бьют
 ///directionView -- направление взгляда атакующего
-function evaluateStrikeDistance(fighterSender, fighterReciever, directionView) {
+function calculateStrikeDistance(fighterSender, fighterReciever, directionView) {
     var distance = undefined
 
     //проверка на совпадение взгляда и получающего удар
@@ -260,6 +260,38 @@ function evaluateStrikeDistance(fighterSender, fighterReciever, directionView) {
 }
 
 
+///Высчитывает вектор удара
+function calculateStrikeVector(fighterReciever, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
+    let vectorStartPoint_X = fighterReciever.x
+    var vectorStartPoint_Y = undefined
+
+    var vectorEndPoint_X = 1
+    if (directionStrike == 0) {
+        vectorEndPoint_X = -1
+    }
+
+    var vectorEndPoint_Y = undefined
+    switch (directionStrike) {
+        case "up":
+            vectorEndPoint_Y = 1
+            vectorStartPoint_Y = fighterHeight
+            break
+        case "straight":
+            vectorEndPoint_Y = 0
+            vectorStartPoint_Y = fighterHeight / 2
+            break
+        case "down":
+            vectorEndPoint_Y = -1
+            vectorStartPoint_Y = 0
+            break
+    }
+
+    let startPoint = { x: vectorStartPoint_X, y: vectorStartPoint_Y }
+    let endPoint = { x: vectorEndPoint_X, y: vectorEndPoint_Y }
+    return { startPoint: startPoint, endPoint: endPoint }
+}
+
+
 ///Обработка удара по его характеристикам
 ///fighterSender -- кто бьет
 ///fighterReciever -- кого бьют
@@ -270,11 +302,12 @@ function evaluateStrikeDistance(fighterSender, fighterReciever, directionView) {
 function processStrike(fighterSender, fighterReciever, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
 
     //расстояние между атакующим и защищающимся
-    let distance = evaluateStrikeDistance(fighterSender, fighterReciever, directionView)
+    let distance = calculateStrikeDistance(fighterSender, fighterReciever, directionView)
 
-    if (distance != undefined) {
+    if (distance == undefined)
+        return
 
-    }
+
 }
 
 
@@ -298,16 +331,13 @@ function HandleRequest_Strike(parsed, connection, lobby) {
         switch (impact) {
             case 0:
                 //удар рукой
-                processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 5)
-                break
+                return processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 5)
             case 1:
                 //удар левой ногой вверх
-                processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 10)
-                break
+                return processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 10)
             case 2:
                 //удар правой ногой прямо
-                processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.straight, 12, 5)
-                break
+                return processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.straight, 12, 5)
         }
     }
 }
@@ -409,7 +439,7 @@ function ComposeAnswer_Status(statusCode) {
 
 
 
-function ComposeAnswer_Strike(FighterRecieverID,vectorStartPoint, vectorEndPoint, endHp) {
+function ComposeAnswer_Strike(FighterRecieverID, vectorStartPoint, vectorEndPoint, endHp) {
     let answer = {
         head: {
             id: FighterRecieverID,
