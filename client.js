@@ -11,19 +11,27 @@ const rl = readline.createInterface({
 rl.on("line", (input) => {
     var words = input.split(" ")
 
-    if (words[0] == "horizontal") {
-        let id = words[1]
-        let by = words[2]
-        requestHorizontalMove(_connection,id * 1,by * 1)
+    if (words[0] == "move") {
+        let id = words[1] * 1
+        let by = words[2] * 1
+        requestHorizontalMove(_connection, id, by)
     }
     else
-        if (words[0] == "create") {
-            requestCreateLobby(_connection)
+        if (words[0] == "strike") {
+            let id = words[1] * 1
+            let direction = words[2] * 1
+            let impact = words[3] * 1
+            requestStrike(_connection, id, direction, impact)
         }
         else
-            if (words[0] == "join") {
-                requestJoinLobby(_connection)
+            if (words[0] == "create") {
+                requestCreateLobby(_connection)
             }
+            else
+                if (words[0] == "join") {
+                    requestJoinLobby(_connection)
+                }
+
 })
 
 
@@ -113,6 +121,26 @@ function requestHorizontalMove(connection, id, by) {
             from: 0.0,
             to: 0.0,
             by: by
+        }
+    }
+
+
+    var query = JSON.stringify(request)
+    console.debug("Sent: " + query)
+    connection.sendUTF(query)
+}
+
+
+function requestStrike(connection, id, direction, impact) {
+
+    var request = {
+        head: {
+            id: id,
+            type: "strike"
+        },
+        body: {
+            direction: direction,
+            impact: impact
         }
     }
 

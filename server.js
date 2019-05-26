@@ -45,7 +45,15 @@ wsServer.on('request', function (request) {
     connection.on('close', function (reasonCode, description) {
         //потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
         removableLobby = massLobby.find((value) => {
-            return (value.Socket1.id == connection.id || value.Socket2.id == connection.id)
+            if (value.Socket1 != undefined)
+                if (value.Socket1.id == connection.id)
+                    return true
+
+            if (value.Socket2 != undefined)
+                if (value.Socket2.id == connection.id)
+                    return true
+
+            return false
         })
 
         if (removableLobby != undefined) {
@@ -88,6 +96,10 @@ wsServer.on('request', function (request) {
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Surrender, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_HorizontalMove, csRequest, lobby)
+                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Strike, csRequest, lobby)
+
+                //листинг лобби
+                printLobbyStatus(lobby)
             }
         }
     })
@@ -105,9 +117,16 @@ function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
         else//исключительный случай для подключаещегося (оповещение создающего)
             if (lobby != undefined) {
                 lobby.Socket1.sendUTF(answer)
-                console.log(new Date() + '; Sent Message: ' + message.utf8Data)
+                console.log(new Date() + '; Sent Message: ' + answer)
             }
     }
+}
+
+
+function printLobbyStatus(lobby) {
+    console.log("LOBBY name = " + lobby.Name + ";password = " + lobby.Password + ";status = " + lobby.Status)
+    console.log("fighter1 x = " + lobby.Fighter1.x + ";isBlock = " + lobby.Fighter1.isOn + ";hp = " + lobby.Fighter1.hp)
+    console.log("fighter2 x = " + lobby.Fighter2.x + ";isBlock = " + lobby.Fighter2.isOn + ";hp = " + lobby.Fighter2.hp)
 }
 
 
@@ -242,19 +261,19 @@ function calculateStrikeDistance(fighterSender, fighterReciever, directionView) 
     //проверка на совпадение взгляда и получающего удар
     //(проверить баг при коллизии моделей, может быть рассинхрон когда sk сам передвинет модели бойцов)
     if (directionView == 0) {
-        let senderLeftX = fighterSender.X - halfFighterWidth()
-        let recieverRightX = fighterReciever.X + halfFighterWidth()
+        let senderLeftX = fighterSender.x - halfFighterWidth()
+        let recieverRightX = fighterReciever.x + halfFighterWidth()
         //тот кто бьет должен быть справа
         if (senderLeftX > recieverRightX) {
             distance = senderLeftX - recieverRightX
         }
     }
     else {
-        let senderRightX = fighterSender.X + halfFighterWidth()
-        let recieverLeftX = fighterReciever.X - halfFighterWidth()
+        let senderRightX = fighterSender.x + halfFighterWidth()
+        let recieverLeftX = fighterReciever.x - halfFighterWidth()
         //тот кто бьет должен быть слева
         if (senderRightX < recieverLeftX) {
-            distance = recieverRightX - senderRightX
+            distance = recieverLeftX - senderRightX
         }
     }
 
@@ -274,15 +293,15 @@ function calculateStrikeVector(fighterReciever, directionView, directionStrike) 
 
     var vectorEndPoint_Y = undefined
     switch (directionStrike) {
-        case "up":
+        case 0://up
             vectorEndPoint_Y = 1
             vectorStartPoint_Y = fighterHeight
             break
-        case "straight":
+        case 1://straight
             vectorEndPoint_Y = 0
             vectorStartPoint_Y = fighterHeight / 2
             break
-        case "down":
+        case 2://down
             vectorEndPoint_Y = -1
             vectorStartPoint_Y = 0
             break
@@ -301,7 +320,7 @@ function calculateStrikeVector(fighterReciever, directionView, directionStrike) 
 ///directionStrike -- направление удара по вертикали
 ///strikeRange -- максимальная дистанция удара
 ///strikeStrength -- максимальная сила удара
-function processStrike(fighterSender, fighterReciever, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
+function processStrike(fighterSender, fighterReciever, impact, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
 
     //расстояние между атакующим и защищающимся
     let distance = calculateStrikeDistance(fighterSender, fighterReciever, directionView)
@@ -315,8 +334,11 @@ function processStrike(fighterSender, fighterReciever, directionView, directionS
         return
 
     let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
+
     let endHp = fighterReciever.hp - maxStrikeStrength
-    return ComposeAnswer_Strike(fighterReciever.id, vector.startPoint, vector.endPoint, endHp)
+    fighterReciever.hp = endHp
+
+    return ComposeAnswer_Strike(fighterSender.id, impact, vector.startPoint, vector.endPoint, endHp)
 }
 
 
@@ -340,13 +362,13 @@ function HandleRequest_Strike(parsed, connection, lobby) {
         switch (impact) {
             case 0:
                 //удар рукой
-                return processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 5)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 100, 5)
             case 1:
                 //удар левой ногой вверх
-                return processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.up, 10, 10)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 100, 10)
             case 2:
                 //удар правой ногой прямо
-                return processStrike(fSender, fReciever, directionView, StrikeDirectionEnum.straight, 12, 5)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 150, 5)
         }
     }
 }
@@ -448,7 +470,7 @@ function ComposeAnswer_Status(statusCode) {
 
 
 
-function ComposeAnswer_Strike(FighterRecieverID, vectorStartPoint, vectorEndPoint, endHp) {
+function ComposeAnswer_Strike(FighterRecieverID, impact, vectorStartPoint, vectorEndPoint, endHp) {
     let answer = {
         head: {
             id: FighterRecieverID,
@@ -459,6 +481,7 @@ function ComposeAnswer_Strike(FighterRecieverID, vectorStartPoint, vectorEndPoin
             y: vectorStartPoint.y,
             dx: vectorEndPoint.x,
             dy: vectorEndPoint.y,
+            impact: impact,
             endHP: endHp
         }
     }
