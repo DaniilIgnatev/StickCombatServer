@@ -156,6 +156,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
 
         // Дескриптор бойца 1
         var fighter1 = {
+            id: 0,
             x: -130.0,
             y: 0.0,
             isOn: false,
@@ -163,6 +164,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
         }
         // Дескриптор бойца 2
         var fighter2 = {
+            id: 1,
             x: 130.0,
             y: 0.0,
             isOn: false,
@@ -261,12 +263,12 @@ function calculateStrikeDistance(fighterSender, fighterReciever, directionView) 
 
 
 ///Высчитывает вектор удара
-function calculateStrikeVector(fighterReciever, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
+function calculateStrikeVector(fighterReciever, directionView, directionStrike) {
     let vectorStartPoint_X = fighterReciever.x
     var vectorStartPoint_Y = undefined
 
     var vectorEndPoint_X = 1
-    if (directionStrike == 0) {
+    if (directionView == 0) {
         vectorEndPoint_X = -1
     }
 
@@ -304,10 +306,17 @@ function processStrike(fighterSender, fighterReciever, directionView, directionS
     //расстояние между атакующим и защищающимся
     let distance = calculateStrikeDistance(fighterSender, fighterReciever, directionView)
 
+    //Боец смотрит в нужную сторону
     if (distance == undefined)
         return
 
+    //Расстояние удара <= максимального
+    if (distance > maxStrikeRange)
+        return
 
+    let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
+    let endHp = fighterReciever.hp - maxStrikeStrength
+    return ComposeAnswer_Strike(fighterReciever.id, vector.startPoint, vector.endPoint, endHp)
 }
 
 
