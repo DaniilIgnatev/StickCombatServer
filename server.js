@@ -2,28 +2,70 @@ var WebSocketServer = require('websocket').server
 var http = require('http')
 
 
+//REGION: HTTP SERVER
 var server = http.createServer(function (request, response) {
-    console.log((new Date()) + '; Received request for ' + request.url)
+    console.debug((new Date()) + ' | Received request for ' + request.url)
     response.writeHead(404)
     response.end()
 })
-server.listen(8080, () => console.log((new Date()) + '; Server is listening on port 8080'))
+server.listen(8080, () => console.debug((new Date()) + ' | Server is listening on port 8080'))
 
-
+//REGION: WS SERVER
 wsServer = new WebSocketServer({
     httpServer: server,
     autoAcceptConnections: false
 })
 
-
 function originIsAllowed(origin) {
     //Ограничение по ip клиента отсутствует
-    return true;
+    return true
+}
+
+//REGION: LOBBY/CONNECTION
+///UID подключения
+var connection_IDAdder = 0
+
+///Полное удаление лобби
+function wipeOffLobby(removableLobby) {
+    if (removableLobby != undefined) {
+        if (removableLobby.Socket1 != undefined)
+            removableLobby.Socket1.close()
+
+        if (removableLobby.Socket2 != undefined)
+            removableLobby.Socket2.close()
+
+        console.debug((new Date()) + " | Removed lobby: " + removableLobby.Name)
+        massLobby = massLobby.filter((value) => { value.Name != removableLobby.Name })
+    }
 }
 
 
-///UID подключения
-var connection_IDAdder = 0
+//Поиск лобби по id сокета (connection)
+function lobbyWithConnection(id){
+    let lobby = massLobby.find((value) => {
+        if (value.Socket1 != undefined)
+            if (value.Socket1.id == id)
+                return true
+
+        if (value.Socket2 != undefined)
+            if (value.Socket2.id == id)
+                return true
+
+        return false
+    })
+    return lobby
+}
+
+
+///Поиск сокета клиента по лобби и id бойца
+function fighterSocket(lobby,fighterID){
+    if (fighterID == 0){
+        return lobby.Socket1
+    }
+    else{
+        return lobby.Socket2
+    }
+}
 
 
 ///Логика обработки входящих запросов на подключение
@@ -31,7 +73,7 @@ wsServer.on('request', function (request) {
     if (!originIsAllowed(request.origin)) {
         // Make sure we only accept requests from an allowed origin
         request.reject()
-        console.log((new Date()) + '; Connection from origin ' + request.origin + ' rejected.')
+        console.debug((new Date()) + ' | Connection from origin ' + request.origin + ' rejected.')
         return
     }
 
@@ -39,33 +81,13 @@ wsServer.on('request', function (request) {
     connection.id = connection_IDAdder
     connection_IDAdder += 1
 
-    console.log((new Date()) + '; Connection accepted. Id = ' + connection.id)
+    console.debug((new Date()) + ' | Connection accepted. Id = ' + connection.id)
 
-    ///Логика обработки закрытия соединения
+    ///Логика обработки закрытия соединения;потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
     connection.on('close', function (reasonCode, description) {
-        //потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
-        removableLobby = massLobby.find((value) => {
-            if (value.Socket1 != undefined)
-                if (value.Socket1.id == connection.id)
-                    return true
+        let removableLobby = lobbyWithConnection(connection.id)
 
-            if (value.Socket2 != undefined)
-                if (value.Socket2.id == connection.id)
-                    return true
-
-            return false
-        })
-
-        if (removableLobby != undefined) {
-            if (removableLobby.Socket1 != undefined)
-                removableLobby.Socket1.close()
-
-            if (removableLobby.Socket2 != undefined)
-                removableLobby.Socket2.close()
-
-            console.log((new Date()) + "; Removed lobby: " + removableLobby.Name)
-            massLobby = massLobby.filter((value) => { value.Name != removableLobby.Name })
-        }
+        wipeOffLobby(removableLobby)
     })
 
     lobbyName = null
@@ -73,7 +95,7 @@ wsServer.on('request', function (request) {
     ///Логика обработки входящих сообщений
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
-            console.log(new Date() + '; Received Message: ' + message.utf8Data)
+            console.debug(new Date() + ' | Received Message: ' + message.utf8Data)
 
             var csRequest = JSON.parse(message.utf8Data)
             var csAnswer = undefined
@@ -92,11 +114,10 @@ wsServer.on('request', function (request) {
                 let lobby = massLobby.find((value) => { return value.Name == lobbyName })
 
                 //тестировать
-                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Pause, csRequest, lobby)
-                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Surrender, csRequest, lobby)
-                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_HorizontalMove, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Strike, csRequest, lobby)
+                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
+                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Status, csRequest, lobby)
 
                 //листинг лобби
                 printLobbyStatus(lobby)
@@ -117,16 +138,18 @@ function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
         else//исключительный случай для подключаещегося (оповещение создающего)
             if (lobby != undefined) {
                 lobby.Socket1.sendUTF(answer)
-                console.log(new Date() + '; Sent Message: ' + answer)
+                console.debug(new Date() + ' | Sent Message: ' + answer)
             }
     }
 }
 
 
+///Вывести основные сведения о лобби
 function printLobbyStatus(lobby) {
-    console.log("LOBBY name = " + lobby.Name + ";password = " + lobby.Password + ";status = " + lobby.Status)
-    console.log("fighter1 x = " + lobby.Fighter1.x + ";isBlock = " + lobby.Fighter1.isOn + ";hp = " + lobby.Fighter1.hp)
-    console.log("fighter2 x = " + lobby.Fighter2.x + ";isBlock = " + lobby.Fighter2.isOn + ";hp = " + lobby.Fighter2.hp)
+    console.debug(new Date() + " | STATUS")
+    console.debug("LOBBY name = " + lobby.Name + ";password = " + lobby.Password + ";status = " + lobby.Status)
+    console.debug("fighter1 x = " + lobby.Fighter1.x + ";isBlock = " + lobby.Fighter1.isOn + ";hp = " + lobby.Fighter1.hp)
+    console.debug("fighter2 x = " + lobby.Fighter2.x + ";isBlock = " + lobby.Fighter2.isOn + ";hp = " + lobby.Fighter2.hp)
 }
 
 
@@ -134,25 +157,36 @@ function printLobbyStatus(lobby) {
 var massLobby = []
 
 /// Перечесление статуса лобби
-const LobbyStatusEnum = Object.freeze({ "refused": 0, "casting": 1, "fight": 2, "pause": 3, "finished": 4 })
+const LobbyStatusEnum = Object.freeze({ "refused": 0, "casting": 1, "fight": 2, "pause": 3, "over": 4, "surrender": 5 })
 
 
-//REGION: ОБРАБОТКА ЗАПРОСОВ КЛИЕНТОВ  
+//REGION: ОБРАБОТКА ЗАПРОСОВ СОЕДИНЕНИЯ 
 
 ///Занимаемое пространство моделью бойца по ширине на сцене
-const fighterWidth = 100.0
+const fighterWidth = 100.00006
 
 function halfFighterWidth() {
     return fighterWidth / 2
 }
 ///Занимаемое пространство моделью бойца по высоте на сцене
-const fighterHeight = 150.0
+const fighterHeight = 128.91574
 
 ///Координата левой границы сцены
 const sceneLeftBorder = -333.5
 
 ///Координата правой границы сцены
 const sceneRightBorder = 333.5
+
+
+///Возвращает дескриптор бойца по его id и lobby
+function fighterDescriptor(id, lobby) {
+    if (id == 0) {
+        return lobby.Fighter1
+    }
+    else {
+        return lobby.Fighter2
+    }
+}
 
 ///Обработка запроса на создание лобби
 function HandleRequest_CreateLobby(parsed, connection, lobby) {
@@ -225,31 +259,64 @@ function HandleRequest_JoinLobby(parsed, connection, lobby) {
 }
 
 
-//тестировать
-///Обработка запроса на сдачу
-function HandleRequest_Surrender(parsed, connection, lobby) {
-    if (parsed.head.type == "surrender") {
-        if (lobby.Status == LobbyStatusEnum.fight) {
-            return ComposeAnswer_Status(LobbyStatusEnum.finished)
+//REGION: ОБРАБОТКА ЗАПРОСОВ СТАТУСА
+
+
+function HandleRequest_Status(parsed, connection, lobby) {
+    if (parsed.head.type == "status") {
+        let code = parsed.body.code
+
+        switch (code) {
+            case 3:
+                return HandleRequest_Pause(parsed, connection, lobby)
+            case 5:
+                return HandleRequest_Surrender(parsed, connection, lobby)
+            default:
+                return undefined
         }
     }
 }
 
-
-//тестировать
 ///Обработка запроса на паузу
 function HandleRequest_Pause(parsed, connection, lobby) {
-    if (parsed.head.type == "pause") {
-        if (lobby.Status == LobbyStatusEnum.fight) {
-            setTimeout(() => { return ComposeAnswer_Status(LobbyStatusEnum.fight) }, 30 * 1000000)
-            return ComposeAnswer_Status(LobbyStatusEnum.pause)
-        }
+    if (lobby.Status == LobbyStatusEnum.fight) {
+        lobby.Status = LobbyStatusEnum.pause
+
+        setTimeout(() => {
+            let answer = ComposeAnswer_Status(LobbyStatusEnum.fight)
+
+            if (lobby != undefined) {
+                if (lobby.Socket1 != undefined) {
+                    lobby.Socket1.sendUTF(answer)//оповещение создавшего
+                    console.debug(new Date() + ' | Sent Message: ' + answer)
+                }
+                if (lobby.Socket2 != undefined) {
+                    lobby.Socket2.sendUTF(answer)//оповещение подключившегося
+                    console.debug(new Date() + ' | Sent Message: ' + answer)
+                }
+            }
+        }, 5 * 1000)
+
+        return ComposeAnswer_Status(LobbyStatusEnum.pause)
     }
 }
 
 
-const StrikeDirectionEnum = Object.freeze({ "up": 0, "straight": 1, "down": 2 })
+///Обработка запроса на сдачу
+function HandleRequest_Surrender(parsed, connection, lobby) {
+    if (lobby.Status == LobbyStatusEnum.fight) {
+        lobby.Status = LobbyStatusEnum.surrender
 
+        setTimeout(wipeOffLobby,10 * 1000,lobby)
+
+        return ComposeAnswer_Status(LobbyStatusEnum.over)
+    }
+}
+
+
+//REGION: ОБРАБОТКА ЗАПРОСОВ УДАРА
+
+const StrikeDirectionEnum = Object.freeze({ "up": 0, "straight": 1, "down": 2 })
 
 ///Определение расстояния между атакующим и защищающимся
 ///fighterSender -- кто бьет
@@ -325,16 +392,15 @@ function processStrike(fighterSender, fighterReciever, impact, directionView, di
     //расстояние между атакующим и защищающимся
     let distance = calculateStrikeDistance(fighterSender, fighterReciever, directionView)
 
-    //Боец смотрит в нужную сторону
-    if (distance == undefined)
-        return
+    //Боец смотрит в нужную сторону и расстояние удара <= максимального
+    if (distance == undefined || (distance == undefined && distance > maxStrikeRange)) {
+        return ComposeAnswer_Strike(fighterSender.id, impact, vector.startPoint, vector.endPoint, fighterReciever.hp)
+    }
 
-    //Расстояние удара <= максимального
-    if (distance > maxStrikeRange)
-        return
-
+    //вектор удара
     let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
 
+    //остаточное hp
     let endHp = fighterReciever.hp - maxStrikeStrength
     fighterReciever.hp = endHp
 
@@ -374,6 +440,8 @@ function HandleRequest_Strike(parsed, connection, lobby) {
 }
 
 
+//REGION: ОБРАБОТКА ЗАПРОСОВ ПЕРЕДВИЖЕНИЯ
+
 
 ///Дескриптор, описывающий границы бойца
 function getFighterBordersDescriptor(centerX) {
@@ -408,7 +476,6 @@ function constrainFighterInScene(X, byX) {
 }
 
 
-//тестировать
 ///Обработка запроса на горизонтальное перемещениеж;клиент присылает by, в замен получает to
 function HandleRequest_HorizontalMove(parsed, connection, lobby) {
     if (parsed.head.type == "horizontalMove") {
@@ -437,15 +504,19 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
 }
 
 
+//REGION: ОБРАБОТКА ЗАПРОСОВ БЛОКА
+
 //тестировать
 ///Обработка запроса на блок удара
 function HandleRequest_Block(parsed, connection, lobby) {
     if (parsed.head.type == "block") {
-        let fighterID = parsed.type.id
+        let fighterID = parsed.head.id
         let isOn = parsed.body.isOn
 
-        if ((fighterID == 0 && lobby.fighter1.isOn != isOn) ||
-            (fighterID == 1 && lobby.fighter2.isOn != isOn)) {
+        let FDescriptor = fighterDescriptor(fighterID, lobby)
+
+        if (FDescriptor.isOn != isOn) {
+            FDescriptor.isOn = isOn
             return ComposeAnswer_Block(parsed, isOn)
         }
     }
