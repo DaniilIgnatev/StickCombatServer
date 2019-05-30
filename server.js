@@ -41,7 +41,7 @@ function wipeOffLobby(removableLobby) {
 
 
 //Поиск лобби по id сокета (connection)
-function lobbyWithConnection(id){
+function lobbyWithConnection(id) {
     let lobby = massLobby.find((value) => {
         if (value.Socket1 != undefined)
             if (value.Socket1.id == id)
@@ -57,12 +57,24 @@ function lobbyWithConnection(id){
 }
 
 
+//Поиск лобби по id сокета (connection)
+function lobbyWithCorruption() {
+    let lobby = massLobby.find((value) => {
+        if (value.Socket1 == undefined)
+            return true
+
+        return false
+    })
+    return lobby
+}
+
+
 ///Поиск сокета клиента по лобби и id бойца
-function fighterSocket(lobby,fighterID){
-    if (fighterID == 0){
+function fighterSocket(lobby, fighterID) {
+    if (fighterID == 0) {
         return lobby.Socket1
     }
-    else{
+    else {
         return lobby.Socket2
     }
 }
@@ -85,8 +97,10 @@ wsServer.on('request', function (request) {
 
     ///Логика обработки закрытия соединения;потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
     connection.on('close', function (reasonCode, description) {
-        let removableLobby = lobbyWithConnection(connection.id)
+        let corruptedLobby = lobbyWithCorruption()
+        wipeOffLobby(corruptedLobby)
 
+        let removableLobby = lobbyWithConnection(connection.id)
         wipeOffLobby(removableLobby)
     })
 
@@ -308,7 +322,7 @@ function HandleRequest_Surrender(parsed, connection, lobby) {
     if (lobby.Status == LobbyStatusEnum.fight) {
         lobby.Status = LobbyStatusEnum.surrender
 
-        setTimeout(wipeOffLobby,10 * 1000,lobby)
+        setTimeout(wipeOffLobby, 10 * 1000, lobby)
 
         return ComposeAnswer_Status(LobbyStatusEnum.over)
     }
@@ -389,23 +403,31 @@ function calculateStrikeVector(fighterReciever, directionView, directionStrike) 
 ///strikeRange -- максимальная дистанция удара
 ///strikeStrength -- максимальная сила удара
 function processStrike(fighterSender, fighterReciever, impact, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
+    if (fighterReciever.hp > 0) {
+        //расстояние между атакующим и защищающимся
+        let distance = calculateStrikeDistance(fighterSender, fighterReciever, directionView)
 
-    //расстояние между атакующим и защищающимся
-    let distance = calculateStrikeDistance(fighterSender, fighterReciever, directionView)
+        //вектор удара
+        let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
 
-    //Боец смотрит в нужную сторону и расстояние удара <= максимального
-    if (distance == undefined || (distance == undefined && distance > maxStrikeRange)) {
-        return ComposeAnswer_Strike(fighterSender.id, impact, vector.startPoint, vector.endPoint, fighterReciever.hp)
+        //остаточное hp
+        var endHp = fighterReciever.hp
+
+        if (distance != undefined && distance <= maxStrikeRange) {
+            if (!fighterReciever.isOn) {//блок уменьшает урон
+                endHp -= maxStrikeStrength
+            } else {
+                endHp -= maxStrikeStrength / 2
+            }
+        }
+
+        fighterReciever.hp = endHp
+
+        return ComposeAnswer_Strike(fighterSender.id, impact, vector.startPoint, vector.endPoint, endHp)
     }
-
-    //вектор удара
-    let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
-
-    //остаточное hp
-    let endHp = fighterReciever.hp - maxStrikeStrength
-    fighterReciever.hp = endHp
-
-    return ComposeAnswer_Strike(fighterSender.id, impact, vector.startPoint, vector.endPoint, endHp)
+    else {
+        return ComposeAnswer_Status(LobbyStatusEnum.over)
+    }
 }
 
 
@@ -421,8 +443,6 @@ function HandleRequest_Strike(parsed, connection, lobby) {
             fSender = lobby.Fighter2
             fReciever = lobby.Fighter1
         }
-
-
 
         let impact = parsed.body.impact
 
@@ -477,7 +497,7 @@ function constrainFighterInScene(X, byX) {
 }
 
 
-function constrainFighterBeyoundOpponent(){
+function constrainFighterBeyoundOpponent() {
 
 }
 
@@ -487,7 +507,7 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
     if (parsed.head.type == "horizontalMove") {
         let by = parsed.body.by
         let fighterID = parsed.head.id
-        let FD = fighterDescriptor(fighterID,lobby)
+        let FD = fighterDescriptor(fighterID, lobby)
 
         let x = FD.x
 
