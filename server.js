@@ -66,7 +66,7 @@ function fighterSocket(lobby,fighterID){
         return lobby.Socket2
     }
 }
-
+//ПРОВЕРКА 
 
 ///Логика обработки входящих запросов на подключение
 wsServer.on('request', function (request) {
@@ -190,10 +190,6 @@ function fighterDescriptor(id, lobby) {
 
 ///Обработка запроса на создание лобби
 function HandleRequest_CreateLobby(parsed, connection, lobby) {
-    if (lobby != undefined) {
-        return ComposeAnswer_Status(LobbyStatusEnum.refused)
-    }
-
     if (parsed.head.type == 'createLobby') {
         var name = parsed.body.name // Название лобби
         var password = parsed.body.password // Пароль к лобби
@@ -234,6 +230,8 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
             Fighter2: fighter2
         }
 
+        console.debug("!!! В созданное лобби socket1 = " + newLobby.Socket1.id)
+
         // Записываем в массив наш объект
         massLobby.push(newLobby)
         return ComposeAnswer_Status(LobbyStatusEnum.casting)
@@ -248,6 +246,7 @@ function HandleRequest_JoinLobby(parsed, connection, lobby) {
 
         if (lobby.Password == password) {
             lobby.Socket2 = connection
+            console.debug("!!! В созданное лобби socket2 = " + lobby.Socket2.id)
             lobby.Status = LobbyStatusEnum.fight
 
             return ComposeAnswer_Status(LobbyStatusEnum.fight)
@@ -277,12 +276,14 @@ function HandleRequest_Status(parsed, connection, lobby) {
     }
 }
 
+//увеличить паузу
 ///Обработка запроса на паузу
 function HandleRequest_Pause(parsed, connection, lobby) {
     if (lobby.Status == LobbyStatusEnum.fight) {
         lobby.Status = LobbyStatusEnum.pause
 
         setTimeout(() => {
+            lobby.Status = LobbyStatusEnum.fight
             let answer = ComposeAnswer_Status(LobbyStatusEnum.fight)
 
             if (lobby != undefined) {
@@ -476,28 +477,24 @@ function constrainFighterInScene(X, byX) {
 }
 
 
+function constrainFighterBeyoundOpponent(){
+
+}
+
+
 ///Обработка запроса на горизонтальное перемещениеж;клиент присылает by, в замен получает to
 function HandleRequest_HorizontalMove(parsed, connection, lobby) {
     if (parsed.head.type == "horizontalMove") {
         let by = parsed.body.by
+        let fighterID = parsed.head.id
+        let FD = fighterDescriptor(fighterID,lobby)
 
-
-        var x = lobby.Fighter1.x
-        if (parsed.head.id == 1) {
-            x = lobby.Fighter2.x
-        }
+        let x = FD.x
 
         let descriptor = getFighterBordersDescriptor(x)
 
         let finalX = constrainFighterInScene(x, by)
-
-
-        if (parsed.head.id == 0) {
-            lobby.Fighter1.x = finalX
-        }
-        else {
-            lobby.Fighter2.x = finalX
-        }
+        FD.x = finalX
 
         return ComposeAnswer_Move(parsed.head.id, x, finalX)
     }
