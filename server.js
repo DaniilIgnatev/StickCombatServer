@@ -68,6 +68,13 @@ function lobbyWithCorruption() {
     return lobby
 }
 
+function WipeCorruptedLobbies(){
+    var lobby = null
+    while (lobby != undefined){
+        lobby = lobbyWithCorruption()
+        wipeOffLobby(lobby)
+    }
+}
 
 ///Поиск сокета клиента по лобби и id бойца
 function fighterSocket(lobby, fighterID) {
@@ -78,7 +85,7 @@ function fighterSocket(lobby, fighterID) {
         return lobby.Socket2
     }
 }
-//ПРОВЕРКА 
+
 
 ///Логика обработки входящих запросов на подключение
 wsServer.on('request', function (request) {
@@ -97,8 +104,7 @@ wsServer.on('request', function (request) {
 
     ///Логика обработки закрытия соединения;потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
     connection.on('close', function (reasonCode, description) {
-        let corruptedLobby = lobbyWithCorruption()
-        wipeOffLobby(corruptedLobby)
+        WipeCorruptedLobbies()//проверить
 
         let removableLobby = lobbyWithConnection(connection.id)
         wipeOffLobby(removableLobby)
@@ -117,11 +123,16 @@ wsServer.on('request', function (request) {
             if (lobbyName == null) {
                 lobbyName = csRequest.body.name
 
+                //обработка создания
                 feedbackClient(connection, undefined, HandleRequest_CreateLobby, csRequest, undefined)
 
+                //обработка присоединения
                 let lobby = massLobby.find((value) => { return value.Name == lobbyName })
-                if (lobby != undefined) {
+                if (lobby != undefined){
                     feedbackClient(connection, lobby.socket1, HandleRequest_JoinLobby, csRequest, lobby)
+                }
+                else{
+                    feedbackClient(connection, undefined, HandleRequest_JoinLobby, csRequest, lobby)
                 }
             }
             else {
@@ -259,20 +270,25 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
 ///Обработка запроса на присоединение к лобби
 function HandleRequest_JoinLobby(parsed, connection, lobby) {
     if (parsed.head.type == "joinLobby") {
-        var password = parsed.body.password
-        let nickname = parsed.body.nickname
-
-        if (lobby.Password == password) {
-            lobby.Socket2 = connection
-            lobby.Fighter2.nickname = nickname
-            
-            console.debug("!!! В созданное лобби socket2 = " + lobby.Socket2.id)
-            lobby.Status = LobbyStatusEnum.fight
-
-            return ComposeAnswer_Status(LobbyStatusEnum.fight)
+        if (lobby == undefined) {
+            return ComposeAnswer_Status(LobbyStatusEnum.refused)
         }
         else {
-            return ComposeAnswer_Status(LobbyStatusEnum.refused)
+            var password = parsed.body.password
+            let nickname = parsed.body.nickname
+
+            if (lobby.Password == password) {
+                lobby.Socket2 = connection
+                lobby.Fighter2.nickname = nickname
+
+                console.debug("!!! В созданное лобби socket2 = " + lobby.Socket2.id)
+                lobby.Status = LobbyStatusEnum.fight
+
+                return ComposeAnswer_Status(LobbyStatusEnum.fight, lobby.Fighter1.nickname, lobby.Fighter2.nickname)
+            }
+            else {
+                return ComposeAnswer_Status(LobbyStatusEnum.refused)
+            }
         }
     }
 }
@@ -316,7 +332,7 @@ function HandleRequest_Pause(parsed, connection, lobby) {
                     console.debug(new Date() + ' | Sent Message: ' + answer)
                 }
             }
-        }, 5 * 1000)
+        }, 15 * 1000)
 
         return ComposeAnswer_Status(LobbyStatusEnum.pause)
     }
@@ -461,7 +477,7 @@ function HandleRequest_Strike(parsed, connection, lobby) {
                 return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 100, 10)
             case 2:
                 //удар правой ногой прямо
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 150, 5)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 150, 7)
         }
     }
 }
@@ -503,7 +519,7 @@ function constrainFighterInScene(X, byX) {
 }
 
 ///Ограничение координат бойцов
-function constrainFighterBeyoundOpponent(movingFighterDescriptor,by,stayingFighterDescriptor) {
+function constrainFighterBeyoundOpponent(movingFighterDescriptor, by, stayingFighterDescriptor) {
 
 }
 
@@ -517,22 +533,23 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
         let movingFD = fighterDescriptor(fighterID, lobby)
         var stayingFD = undefined
 
-        if (fighterID == 0){
-            stayingFD = fighterDescriptor(1,lobby)
-        }else{
-            stayingFD = fighterDescriptor(0,lobby)
+        if (fighterID == 0) {
+            stayingFD = fighterDescriptor(1, lobby)
+        } else {
+            stayingFD = fighterDescriptor(0, lobby)
         }
 
-        let stayingFighterBordersDescriptor = getFighterBordersDescriptor(stayingFD.x)
-
         let startMovingX = movingFD.x
+        var finalX = startMovingX
+
+        let stayingFighterBordersDescriptor = getFighterBordersDescriptor(stayingFD.x)
         let movingFighterBordersDescriptor = getFighterBordersDescriptor(startMovingX)
 
         //блокировка перехлеста бойцов
-        constrainFighterBeyoundOpponent(movingFighterDescriptor,by,stayingFighterBordersDescriptor)
+        constrainFighterBeyoundOpponent(movingFighterBordersDescriptor, by, stayingFighterBordersDescriptor)
 
-        let finalX = constrainFighterInScene(startMovingX, by)
-        FD.startMovingX = finalX
+        finalX = constrainFighterInScene(startMovingX, by)
+        movingFD.x = finalX
 
         return ComposeAnswer_Move(parsed.head.id, startMovingX, finalX)
     }
@@ -560,7 +577,7 @@ function HandleRequest_Block(parsed, connection, lobby) {
 
 //REGION: JSON ОТВЕТЫ КЛИЕНТАМ
 
-function ComposeAnswer_Status(statusCode) {
+function ComposeAnswer_Status(statusCode, nickname1, nickname2) {
     let answer = {
         head: {
             type: "status"
@@ -568,8 +585,8 @@ function ComposeAnswer_Status(statusCode) {
         body: {
             code: statusCode,
             description: "",
-            nickname1: "",
-            nickname2: ""
+            nickname1: nickname1,
+            nickname2: nickname2
         }
     }
     let json = JSON.stringify(answer)
