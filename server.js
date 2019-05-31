@@ -25,6 +25,8 @@ function originIsAllowed(origin) {
 ///UID подключения
 var connection_IDAdder = 0
 
+var connections = []
+
 ///Полное удаление лобби
 function wipeOffLobby(removableLobby) {
     if (removableLobby != undefined) {
@@ -97,6 +99,7 @@ wsServer.on('request', function (request) {
     }
 
     var connection = request.accept(acceptedProtocol = null, allowedOrigin = request.origin)
+    connections.push(connection)
     connection.id = connection_IDAdder
     connection_IDAdder += 1
 
@@ -138,7 +141,7 @@ wsServer.on('request', function (request) {
             else {
                 let lobby = massLobby.find((value) => { return value.Name == lobbyName })
 
-                //тестировать
+
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_HorizontalMove, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Strike, csRequest, lobby)
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
@@ -258,7 +261,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
             Fighter2: fighter2
         }
 
-        console.debug("!!! В созданное лобби socket1 = " + newLobby.Socket1.id)
+        console.debug("!!! В созданном лобби socket1 = " + newLobby.Socket1.id)
 
         // Записываем в массив наш объект
         massLobby.push(newLobby)
@@ -281,7 +284,7 @@ function HandleRequest_JoinLobby(parsed, connection, lobby) {
                 lobby.Socket2 = connection
                 lobby.Fighter2.nickname = nickname
 
-                console.debug("!!! В созданное лобби socket2 = " + lobby.Socket2.id)
+                console.debug("!!! В созданном лобби socket2 = " + lobby.Socket2.id)
                 lobby.Status = LobbyStatusEnum.fight
 
                 return ComposeAnswer_Status(LobbyStatusEnum.fight, lobby.Fighter1.nickname, lobby.Fighter2.nickname)
@@ -362,22 +365,25 @@ const StrikeDirectionEnum = Object.freeze({ "up": 0, "straight": 1, "down": 2 })
 function calculateStrikeDistance(fighterSender, fighterReciever, directionView) {
     var distance = undefined
 
+    let senderBordersDescriptor = getFighterBordersDescriptor(fighterSender.x)
+    let recieverBordersDescriptor = getFighterBordersDescriptor(fighterReciever.x)
+
     //проверка на совпадение взгляда и получающего удар
     //(проверить баг при коллизии моделей, может быть рассинхрон когда sk сам передвинет модели бойцов)
     if (directionView == 0) {
-        let senderLeftX = fighterSender.x - halfFighterWidth()
-        let recieverRightX = fighterReciever.x + halfFighterWidth()
+        //let senderLeftX = fighterSender.x - halfFighterWidth()
+        //let recieverRightX = fighterReciever.x + halfFighterWidth()
         //тот кто бьет должен быть справа
-        if (senderLeftX > recieverRightX) {
-            distance = senderLeftX - recieverRightX
+        if (senderBordersDescriptor.leftX >= recieverBordersDescriptor.centerX) {
+            distance = senderBordersDescriptor.leftX - recieverBordersDescriptor.centerX
         }
     }
     else {
-        let senderRightX = fighterSender.x + halfFighterWidth()
-        let recieverLeftX = fighterReciever.x - halfFighterWidth()
+        //let senderRightX = fighterSender.x + halfFighterWidth()
+        //let recieverLeftX = fighterReciever.x - halfFighterWidth()
         //тот кто бьет должен быть слева
-        if (senderRightX < recieverLeftX) {
-            distance = recieverLeftX - senderRightX
+        if (senderBordersDescriptor.rightX <= recieverBordersDescriptor.centerX) {
+            distance = recieverBordersDescriptor.centerX - senderBordersDescriptor.rightX
         }
     }
 
@@ -427,7 +433,7 @@ function calculateStrikeVector(fighterReciever, directionView, directionStrike) 
 function processStrike(fighterSender, fighterReciever, impact, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
     if (fighterReciever.hp > 0) {
         //расстояние между атакующим и защищающимся
-        let distance = calculateStrikeDistance(fighterSender, fighterReciever, directionView)
+        let distance = Math.abs(calculateStrikeDistance(fighterSender, fighterReciever, directionView))
 
         //вектор удара
         let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
@@ -471,13 +477,13 @@ function HandleRequest_Strike(parsed, connection, lobby) {
         switch (impact) {
             case 0:
                 //удар рукой
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 100, 5)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 30, 5)
             case 1:
                 //удар левой ногой вверх
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 100, 10)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 50, 10)
             case 2:
                 //удар правой ногой прямо
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 150, 7)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 50, 7)
         }
     }
 }
@@ -518,6 +524,7 @@ function constrainFighterInScene(X, byX) {
     return finalX
 }
 
+
 ///Ограничение координат бойцов
 function constrainFighterBeyoundOpponent(movingFighterDescriptor, by, stayingFighterDescriptor) {
     //проверка на вхождение в границы другого бойца
@@ -534,8 +541,8 @@ function constrainFighterBeyoundOpponent(movingFighterDescriptor, by, stayingFig
     else{
         if (finalMovingLeftX < stayingFighterDescriptor.rightX){
             movingFighterDescriptor.leftX = stayingFighterDescriptor.rightX
-            movingFighterDescriptor.centerX = movingFighterDescriptor.leftX - fighterWidth / 2
-            movingFighterDescriptor.rightX = movingFighterDescriptor.leftX - fighterWidth
+            movingFighterDescriptor.centerX = movingFighterDescriptor.leftX + fighterWidth / 2
+            movingFighterDescriptor.rightX = movingFighterDescriptor.leftX + fighterWidth
         }
     }
 
