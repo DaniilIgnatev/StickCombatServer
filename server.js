@@ -520,7 +520,26 @@ function constrainFighterInScene(X, byX) {
 
 ///Ограничение координат бойцов
 function constrainFighterBeyoundOpponent(movingFighterDescriptor, by, stayingFighterDescriptor) {
+    //проверка на вхождение в границы другого бойца
+    let finalMovingLeftX = movingFighterDescriptor.leftX + by
+    let finalMovingRightX = movingFighterDescriptor.rightX + by
 
+    if (movingFighterDescriptor.centerX <= stayingFighterDescriptor.centerX){
+        if (finalMovingRightX > stayingFighterDescriptor.leftX){
+            movingFighterDescriptor.rightX = stayingFighterDescriptor.leftX
+            movingFighterDescriptor.centerX = movingFighterDescriptor.rightX - fighterWidth / 2
+            movingFighterDescriptor.leftX = movingFighterDescriptor.rightX - fighterWidth
+        }
+    }
+    else{
+        if (finalMovingLeftX < stayingFighterDescriptor.rightX){
+            movingFighterDescriptor.leftX = stayingFighterDescriptor.rightX
+            movingFighterDescriptor.centerX = movingFighterDescriptor.leftX - fighterWidth / 2
+            movingFighterDescriptor.rightX = movingFighterDescriptor.leftX - fighterWidth
+        }
+    }
+
+    return movingFighterDescriptor
 }
 
 
@@ -543,12 +562,12 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
         var finalX = startMovingX
 
         let stayingFighterBordersDescriptor = getFighterBordersDescriptor(stayingFD.x)
-        let movingFighterBordersDescriptor = getFighterBordersDescriptor(startMovingX)
+        var movingFighterBordersDescriptor = getFighterBordersDescriptor(startMovingX)
 
         //блокировка перехлеста бойцов
-        constrainFighterBeyoundOpponent(movingFighterBordersDescriptor, by, stayingFighterBordersDescriptor)
+        movingFighterBordersDescriptor = constrainFighterBeyoundOpponent(movingFighterBordersDescriptor, by, stayingFighterBordersDescriptor)
 
-        finalX = constrainFighterInScene(startMovingX, by)
+        finalX = constrainFighterInScene(movingFighterBordersDescriptor.centerX, by)
         movingFD.x = finalX
 
         return ComposeAnswer_Move(parsed.head.id, startMovingX, finalX)
