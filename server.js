@@ -70,9 +70,9 @@ function lobbyWithCorruption() {
     return lobby
 }
 
-function WipeCorruptedLobbies(){
+function WipeCorruptedLobbies() {
     var lobby = null
-    while (lobby != undefined){
+    while (lobby != undefined) {
         lobby = lobbyWithCorruption()
         wipeOffLobby(lobby)
     }
@@ -131,10 +131,10 @@ wsServer.on('request', function (request) {
 
                 //обработка присоединения
                 let lobby = massLobby.find((value) => { return value.Name == lobbyName })
-                if (lobby != undefined){
+                if (lobby != undefined) {
                     feedbackClient(connection, lobby.socket1, HandleRequest_JoinLobby, csRequest, lobby)
                 }
-                else{
+                else {
                     feedbackClient(connection, undefined, HandleRequest_JoinLobby, csRequest, lobby)
                 }
             }
@@ -431,34 +431,34 @@ function calculateStrikeVector(fighterReciever, directionView, directionStrike) 
 ///strikeRange -- максимальная дистанция удара
 ///strikeStrength -- максимальная сила удара
 function processStrike(fighterSender, fighterReciever, impact, directionView, directionStrike, maxStrikeRange, maxStrikeStrength) {
-    if (fighterReciever.hp > 0) {
-        //расстояние между атакующим и защищающимся
-        let distance = Math.abs(calculateStrikeDistance(fighterSender, fighterReciever, directionView))
+    //расстояние между атакующим и защищающимся
+    let distance = Math.abs(calculateStrikeDistance(fighterSender, fighterReciever, directionView))
 
-        //вектор удара
-        let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
+    //вектор удара
+    let vector = calculateStrikeVector(fighterReciever, directionView, directionStrike)
 
-        //остаточное hp
-        var endHp = fighterReciever.hp
+    //остаточное hp
+    var endHp = fighterReciever.hp
 
-        if (distance != undefined && distance <= maxStrikeRange) {
-            if (!fighterReciever.isOn) {//блок уменьшает урон
-                endHp -= maxStrikeStrength
-            } else {
-                endHp -= maxStrikeStrength / 2
-            }
-
-            if (endHp < 0){
-                endHp = 0.0
-            }
+    if (distance != undefined && distance <= maxStrikeRange) {
+        if (!fighterReciever.isOn) {//блок уменьшает урон
+            endHp -= maxStrikeStrength
+        } else {
+            endHp -= maxStrikeStrength / 2
         }
 
-        fighterReciever.hp = endHp
+        if (endHp < 0) {
+            endHp = 0.0
+        }
+    }
 
-        return ComposeAnswer_Strike(fighterSender.id, impact, vector.startPoint, vector.endPoint, endHp)
+    fighterReciever.hp = endHp
+
+    if (fighterReciever.hp <= 0) {
+        return ComposeAnswer_Status(LobbyStatusEnum.over)
     }
     else {
-        return ComposeAnswer_Status(LobbyStatusEnum.over)
+        return ComposeAnswer_Strike(fighterSender.id, impact, vector.startPoint, vector.endPoint, endHp)
     }
 }
 
@@ -535,15 +535,15 @@ function constrainFighterBeyoundOpponent(movingFighterDescriptor, by, stayingFig
     let finalMovingLeftX = movingFighterDescriptor.leftX + by
     let finalMovingRightX = movingFighterDescriptor.rightX + by
 
-    if (movingFighterDescriptor.centerX <= stayingFighterDescriptor.centerX){
-        if (finalMovingRightX > stayingFighterDescriptor.leftX){
+    if (movingFighterDescriptor.centerX <= stayingFighterDescriptor.centerX) {
+        if (finalMovingRightX > stayingFighterDescriptor.leftX) {
             movingFighterDescriptor.rightX = stayingFighterDescriptor.leftX
             movingFighterDescriptor.centerX = movingFighterDescriptor.rightX - fighterWidth / 2
             movingFighterDescriptor.leftX = movingFighterDescriptor.rightX - fighterWidth
         }
     }
-    else{
-        if (finalMovingLeftX < stayingFighterDescriptor.rightX){
+    else {
+        if (finalMovingLeftX < stayingFighterDescriptor.rightX) {
             movingFighterDescriptor.leftX = stayingFighterDescriptor.rightX
             movingFighterDescriptor.centerX = movingFighterDescriptor.leftX + fighterWidth / 2
             movingFighterDescriptor.rightX = movingFighterDescriptor.leftX + fighterWidth
