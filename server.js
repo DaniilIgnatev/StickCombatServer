@@ -207,6 +207,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
     if (parsed.head.type == 'createLobby') {
         var name = parsed.body.name // Название лобби
         var password = parsed.body.password // Пароль к лобби
+        let nickname = parsed.body.nickname
 
         //Проверка на повтор имени
         let lobby = massLobby.find((value) => { return value.Name == lobbyName })
@@ -223,7 +224,8 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
             x: -130.0,
             y: 0.0,
             isOn: false,
-            hp: 100
+            hp: 100,
+            nickname: nickname
         }
         // Дескриптор бойца 2
         var fighter2 = {
@@ -231,7 +233,8 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
             x: 130.0,
             y: 0.0,
             isOn: false,
-            hp: 100
+            hp: 100,
+            nickname: undefined
         }
 
         var newLobby = {
@@ -257,9 +260,12 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
 function HandleRequest_JoinLobby(parsed, connection, lobby) {
     if (parsed.head.type == "joinLobby") {
         var password = parsed.body.password
+        let nickname = parsed.body.nickname
 
         if (lobby.Password == password) {
             lobby.Socket2 = connection
+            lobby.Fighter2.nickname = nickname
+            
             console.debug("!!! В созданное лобби socket2 = " + lobby.Socket2.id)
             lobby.Status = LobbyStatusEnum.fight
 
@@ -496,8 +502,8 @@ function constrainFighterInScene(X, byX) {
     return finalX
 }
 
-
-function constrainFighterBeyoundOpponent() {
+///Ограничение координат бойцов
+function constrainFighterBeyoundOpponent(movingFighterDescriptor,by,stayingFighterDescriptor) {
 
 }
 
@@ -507,16 +513,28 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
     if (parsed.head.type == "horizontalMove") {
         let by = parsed.body.by
         let fighterID = parsed.head.id
-        let FD = fighterDescriptor(fighterID, lobby)
 
-        let x = FD.x
+        let movingFD = fighterDescriptor(fighterID, lobby)
+        var stayingFD = undefined
 
-        let descriptor = getFighterBordersDescriptor(x)
+        if (fighterID == 0){
+            stayingFD = fighterDescriptor(1,lobby)
+        }else{
+            stayingFD = fighterDescriptor(0,lobby)
+        }
 
-        let finalX = constrainFighterInScene(x, by)
-        FD.x = finalX
+        let stayingFighterBordersDescriptor = getFighterBordersDescriptor(stayingFD.x)
 
-        return ComposeAnswer_Move(parsed.head.id, x, finalX)
+        let startMovingX = movingFD.x
+        let movingFighterBordersDescriptor = getFighterBordersDescriptor(startMovingX)
+
+        //блокировка перехлеста бойцов
+        constrainFighterBeyoundOpponent(movingFighterDescriptor,by,stayingFighterBordersDescriptor)
+
+        let finalX = constrainFighterInScene(startMovingX, by)
+        FD.startMovingX = finalX
+
+        return ComposeAnswer_Move(parsed.head.id, startMovingX, finalX)
     }
 }
 
@@ -549,7 +567,9 @@ function ComposeAnswer_Status(statusCode) {
         },
         body: {
             code: statusCode,
-            description: ""
+            description: "",
+            nickname1: "",
+            nickname2: ""
         }
     }
     let json = JSON.stringify(answer)
