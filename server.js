@@ -588,7 +588,7 @@ function HandleRequest_HorizontalMove(parsed, connection, lobby) {
 
 //REGION: ОБРАБОТКА ЗАПРОСОВ БЛОКА
 
-//тестировать
+
 ///Обработка запроса на блок удара
 function HandleRequest_Block(parsed, connection, lobby) {
     if (parsed.head.type == "block") {
