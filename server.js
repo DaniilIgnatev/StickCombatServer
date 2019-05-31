@@ -447,6 +447,10 @@ function processStrike(fighterSender, fighterReciever, impact, directionView, di
             } else {
                 endHp -= maxStrikeStrength / 2
             }
+
+            if (endHp < 0){
+                endHp = 0.0
+            }
         }
 
         fighterReciever.hp = endHp
