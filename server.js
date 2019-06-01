@@ -150,14 +150,16 @@ wsServer.on('request', function (request) {
                 let savedlobbyname = conDescriptor.lobbyName
                 let lobby = massLobby.find((value) => { return value.Name == savedlobbyname })
 
-
-                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_HorizontalMove, csRequest, lobby)
-                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Strike, csRequest, lobby)
-                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
-                feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Status, csRequest, lobby)
-
-                //листинг лобби
-                printLobbyStatus(lobby)
+                if (lobby != undefined){
+                    feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_HorizontalMove, csRequest, lobby)
+                    feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Strike, csRequest, lobby)
+                    feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Block, csRequest, lobby)
+                    feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_Status, csRequest, lobby)
+    
+                    //листинг лобби
+                    printLobbyStatus(lobby)
+                }
+                
             }
         }
     })
