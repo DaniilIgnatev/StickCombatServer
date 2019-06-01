@@ -25,7 +25,7 @@ function originIsAllowed(origin) {
 ///UID подключения
 var connection_IDAdder = 0
 
-var connections = []
+var connectionDescriptors = []
 
 ///Полное удаление лобби
 function wipeOffLobby(removableLobby) {
@@ -88,6 +88,13 @@ function fighterSocket(lobby, fighterID) {
     }
 }
 
+function connectionDescriptorByLobbyName(lobbyname) {
+    return connectionDescriptors.find((value) => { return value.lobbyName == lobbyname })
+}
+
+function connectionDescriptorByID(connectionID) {
+    return connectionDescriptors.find((value) => { return value.connection.id == connectionID })
+}
 
 ///Логика обработки входящих запросов на подключение
 wsServer.on('request', function (request) {
@@ -99,7 +106,6 @@ wsServer.on('request', function (request) {
     }
 
     var connection = request.accept(acceptedProtocol = null, allowedOrigin = request.origin)
-    connections.push(connection)
     connection.id = connection_IDAdder
     connection_IDAdder += 1
 
@@ -113,7 +119,7 @@ wsServer.on('request', function (request) {
         wipeOffLobby(removableLobby)
     })
 
-    lobbyName = null
+
 
     ///Логика обработки входящих сообщений
     connection.on('message', function (message) {
@@ -123,23 +129,26 @@ wsServer.on('request', function (request) {
             var csRequest = JSON.parse(message.utf8Data)
             var csAnswer = undefined
 
-            if (lobbyName == null) {
-                lobbyName = csRequest.body.name
+            let conDescriptor = connectionDescriptorByID(connection.id)
+            if (conDescriptor == undefined) {
 
-                //обработка создания
+                //обработка создания лобби
                 feedbackClient(connection, undefined, HandleRequest_CreateLobby, csRequest, undefined)
 
+                //для присоединения должен быть дескриптор
+                
                 //обработка присоединения
-                let lobby = massLobby.find((value) => { return value.Name == lobbyName })
-                if (lobby != undefined) {
+              
+                if (csRequest.head.type == "joinLobby"){
+                    let lobby = massLobby.find((value) => { return value.Name == csRequest.body.name })
                     feedbackClient(connection, lobby.socket1, HandleRequest_JoinLobby, csRequest, lobby)
-                }
-                else {
-                    feedbackClient(connection, undefined, HandleRequest_JoinLobby, csRequest, lobby)
                 }
             }
             else {
-                let lobby = massLobby.find((value) => { return value.Name == lobbyName })
+                //процесс игры
+                let conDescriptor = connectionDescriptorByID(connection.id)
+                let savedlobbyname = conDescriptor.lobbyName
+                let lobby = massLobby.find((value) => { return value.Name == savedlobbyname })
 
 
                 feedbackClient(lobby.Socket1, lobby.Socket2, HandleRequest_HorizontalMove, csRequest, lobby)
@@ -217,14 +226,14 @@ function fighterDescriptor(id, lobby) {
 }
 
 ///Обработка запроса на создание лобби
-function HandleRequest_CreateLobby(parsed, connection, lobby) {
+function HandleRequest_CreateLobby(parsed, connection, lobby, lobbyName) {
     if (parsed.head.type == 'createLobby') {
         var name = parsed.body.name // Название лобби
         var password = parsed.body.password // Пароль к лобби
         let nickname = parsed.body.nickname
 
         //Проверка на повтор имени
-        let lobby = massLobby.find((value) => { return value.Name == lobbyName })
+        let lobby = massLobby.find((value) => { return value.Name == name })
         if (lobby != undefined) {
             return ComposeAnswer_Status(LobbyStatusEnum.refused)
         }
@@ -265,6 +274,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby) {
 
         // Записываем в массив наш объект
         massLobby.push(newLobby)
+        connectionDescriptors.push({ connection: connection, lobbyName: newLobby.Name })
         return ComposeAnswer_Status(LobbyStatusEnum.casting)
     }
 }
@@ -287,6 +297,7 @@ function HandleRequest_JoinLobby(parsed, connection, lobby) {
                 console.debug("!!! В созданном лобби socket2 = " + lobby.Socket2.id)
                 lobby.Status = LobbyStatusEnum.fight
 
+                connectionDescriptors.push({ connection: connection, lobbyName: lobby.Name })
                 return ComposeAnswer_Status(LobbyStatusEnum.fight, lobby.Fighter1.nickname, lobby.Fighter2.nickname)
             }
             else {
