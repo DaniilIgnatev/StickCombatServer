@@ -59,7 +59,7 @@ function lobbyWithConnection(id) {
 }
 
 
-//Поиск лобби по id сокета (connection)
+//Поиск поврежденного лобби с без сокета1
 function lobbyWithCorruption() {
     let lobby = massLobby.find((value) => {
         if (value.Socket1 == undefined)
@@ -70,6 +70,7 @@ function lobbyWithCorruption() {
     return lobby
 }
 
+//Удаление всех поврежденных лобби
 function WipeCorruptedLobbies() {
     var lobby = null
     while (lobby != undefined) {
@@ -78,7 +79,7 @@ function WipeCorruptedLobbies() {
     }
 }
 
-///Поиск сокета клиента по лобби и id бойца
+///Определение сокета клиента по лобби и id бойца
 function fighterSocket(lobby, fighterID) {
     if (fighterID == 0) {
         return lobby.Socket1
@@ -88,10 +89,12 @@ function fighterSocket(lobby, fighterID) {
     }
 }
 
+//Поиск описателя соединения по имени его лобби
 function connectionDescriptorByLobbyName(lobbyname) {
     return connectionDescriptors.find((value) => { return value.lobbyName == lobbyname })
 }
 
+//Поиск описателя соединения по id его соединения
 function connectionDescriptorByID(connectionID) {
     return connectionDescriptors.find((value) => { return value.connection.id == connectionID })
 }
@@ -113,12 +116,11 @@ wsServer.on('request', function (request) {
 
     ///Логика обработки закрытия соединения;потеря соединения одного клиента -- разрыв у второго клиента, удаление лобби
     connection.on('close', function (reasonCode, description) {
-        WipeCorruptedLobbies()//проверить
+        //WipeCorruptedLobbies()//проверить
 
         let removableLobby = lobbyWithConnection(connection.id)
         wipeOffLobby(removableLobby)
     })
-
 
 
     ///Логика обработки входящих сообщений
@@ -202,13 +204,13 @@ const LobbyStatusEnum = Object.freeze({ "refused": 0, "casting": 1, "fight": 2, 
 //REGION: ОБРАБОТКА ЗАПРОСОВ СОЕДИНЕНИЯ 
 
 ///Занимаемое пространство моделью бойца по ширине на сцене
-const fighterWidth = 100.00006
+const fighterWidth = 100
 
 function halfFighterWidth() {
     return fighterWidth / 2
 }
 ///Занимаемое пространство моделью бойца по высоте на сцене
-const fighterHeight = 128.91574
+const fighterHeight = 129
 
 ///Координата левой границы сцены
 const sceneLeftBorder = -333.5
@@ -216,6 +218,8 @@ const sceneLeftBorder = -333.5
 ///Координата правой границы сцены
 const sceneRightBorder = 333.5
 
+///Ширина прозрачной текстуры бойца
+const visualGape = halfFighterWidth() / 1.7
 
 ///Возвращает дескриптор бойца по его id и lobby
 function fighterDescriptor(id, lobby) {
@@ -363,7 +367,7 @@ function HandleRequest_Surrender(parsed, connection, lobby) {
 
         setTimeout(wipeOffLobby, 10 * 1000, lobby)
 
-        return ComposeAnswer_Status(LobbyStatusEnum.over)
+        return ComposeAnswer_Status(LobbyStatusEnum.surrender)
     }
 }
 
@@ -385,19 +389,15 @@ function calculateStrikeDistance(fighterSender, fighterReciever, directionView) 
     //проверка на совпадение взгляда и получающего удар
     //(проверить баг при коллизии моделей, может быть рассинхрон когда sk сам передвинет модели бойцов)
     if (directionView == 0) {
-        //let senderLeftX = fighterSender.x - halfFighterWidth()
-        //let recieverRightX = fighterReciever.x + halfFighterWidth()
-        //тот кто бьет должен быть справа
-        if (senderBordersDescriptor.leftX >= recieverBordersDescriptor.rightX) {
-            distance = senderBordersDescriptor.leftX - recieverBordersDescriptor.rightX
+        //тот кто бьет находится правее
+        if (senderBordersDescriptor.centerX >= recieverBordersDescriptor.centerX) {
+            distance = senderBordersDescriptor.visibleLeftX - recieverBordersDescriptor.visibleRightX
         }
     }
     else {
-        //let senderRightX = fighterSender.x + halfFighterWidth()
-        //let recieverLeftX = fighterReciever.x - halfFighterWidth()
-        //тот кто бьет должен быть слева
-        if (senderBordersDescriptor.rightX <= recieverBordersDescriptor.leftX) {
-            distance = recieverBordersDescriptor.leftX - senderBordersDescriptor.rightX
+        //тот кто бьет находится левее
+        if (senderBordersDescriptor.centerX <= recieverBordersDescriptor.centerX) {
+            distance = recieverBordersDescriptor.visibleLeftX - senderBordersDescriptor.visibleRightX
         }
     }
 
@@ -495,21 +495,19 @@ function HandleRequest_Strike(parsed, connection, lobby) {
         switch (impact) {
             case 0:
                 //удар рукой
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 10, 5)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, visualGape, 5)
             case 1:
                 //удар левой ногой вверх
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 15, 10)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, visualGape * 1.5, 10)
             case 2:
                 //удар правой ногой прямо
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 10, 7)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, visualGape, 7)
         }
     }
 }
 
 
 //REGION: ОБРАБОТКА ЗАПРОСОВ ПЕРЕДВИЖЕНИЯ
-
-var visualGape = halfFighterWidth() / 2//ширина прозрачной текстуры бойца
 
 ///Дескриптор, описывающий границы бойца
 function getFighterBordersDescriptor(centerX) {
