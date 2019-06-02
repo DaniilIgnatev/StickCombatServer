@@ -362,13 +362,13 @@ function HandleRequest_Pause(parsed, connection, lobby) {
 
 ///Обработка запроса на сдачу
 function HandleRequest_Surrender(parsed, connection, lobby) {
-    if (lobby.Status == LobbyStatusEnum.fight) {
+    //if (lobby.Status == LobbyStatusEnum.fight) {
         lobby.Status = LobbyStatusEnum.surrender
 
         setTimeout(wipeOffLobby, 10 * 1000, lobby)
 
         return ComposeAnswer_Status(LobbyStatusEnum.surrender)
-    }
+    //}
 }
 
 
