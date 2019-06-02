@@ -36,8 +36,12 @@ function wipeOffLobby(removableLobby) {
         if (removableLobby.Socket2 != undefined)
             removableLobby.Socket2.close()
 
-        console.debug((new Date()) + " | Removed lobby: " + removableLobby.Name)
+        let lastLength = massLobby.length
         massLobby = massLobby.filter((value) => { value.Name != removableLobby.Name })
+
+        if (lastLength != massLobby.length){
+            console.debug((new Date()) + " | Removed lobby: " + removableLobby.Name)
+        }
     }
 }
 
@@ -99,6 +103,10 @@ function connectionDescriptorByID(connectionID) {
     return connectionDescriptors.find((value) => { return value.connection.id == connectionID })
 }
 
+function wipeOffConnectionDescriptor(connectionId){
+    connectionDescriptors = connectionDescriptors.filter((value) => {value.connection.id != connectionId})
+}
+
 ///Логика обработки входящих запросов на подключение
 wsServer.on('request', function (request) {
     if (!originIsAllowed(request.origin)) {
@@ -120,6 +128,7 @@ wsServer.on('request', function (request) {
 
         let removableLobby = lobbyWithConnection(connection.id)
         wipeOffLobby(removableLobby)
+        wipeOffConnectionDescriptor(connection.id)
     })
 
 
