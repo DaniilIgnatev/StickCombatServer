@@ -124,7 +124,7 @@ wsServer.on('request', function (request) {
     ///Логика обработки входящих сообщений
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
-            console.debug(new Date() + ' | Received Message: ' + message.utf8Data)
+            //console.debug(new Date() + ' | Received Message: ' + message.utf8Data)
 
             var csRequest = JSON.parse(message.utf8Data)
             var csAnswer = undefined
@@ -177,7 +177,7 @@ function feedbackClient(socket1, socket2, requestHandler, requestJSON, lobby) {
         else//исключительный случай для подключаещегося (оповещение создающего)
             if (lobby != undefined) {
                 lobby.Socket1.sendUTF(answer)
-                console.debug(new Date() + ' | Sent Message: ' + answer)
+                //console.debug(new Date() + ' | Sent Message: ' + answer)
             }
     }
 }
@@ -388,16 +388,16 @@ function calculateStrikeDistance(fighterSender, fighterReciever, directionView) 
         //let senderLeftX = fighterSender.x - halfFighterWidth()
         //let recieverRightX = fighterReciever.x + halfFighterWidth()
         //тот кто бьет должен быть справа
-        if (senderBordersDescriptor.leftX >= recieverBordersDescriptor.centerX) {
-            distance = senderBordersDescriptor.leftX - recieverBordersDescriptor.centerX
+        if (senderBordersDescriptor.leftX >= recieverBordersDescriptor.rightX) {
+            distance = senderBordersDescriptor.leftX - recieverBordersDescriptor.rightX
         }
     }
     else {
         //let senderRightX = fighterSender.x + halfFighterWidth()
         //let recieverLeftX = fighterReciever.x - halfFighterWidth()
         //тот кто бьет должен быть слева
-        if (senderBordersDescriptor.rightX <= recieverBordersDescriptor.centerX) {
-            distance = recieverBordersDescriptor.centerX - senderBordersDescriptor.rightX
+        if (senderBordersDescriptor.rightX <= recieverBordersDescriptor.leftX) {
+            distance = recieverBordersDescriptor.leftX - senderBordersDescriptor.rightX
         }
     }
 
@@ -495,13 +495,13 @@ function HandleRequest_Strike(parsed, connection, lobby) {
         switch (impact) {
             case 0:
                 //удар рукой
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 30, 5)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 10, 5)
             case 1:
                 //удар левой ногой вверх
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 50, 10)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.up, 15, 10)
             case 2:
                 //удар правой ногой прямо
-                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 50, 7)
+                return processStrike(fSender, fReciever, impact, directionView, StrikeDirectionEnum.straight, 10, 7)
         }
     }
 }
@@ -509,17 +509,26 @@ function HandleRequest_Strike(parsed, connection, lobby) {
 
 //REGION: ОБРАБОТКА ЗАПРОСОВ ПЕРЕДВИЖЕНИЯ
 
+var visualGape = halfFighterWidth() / 2//ширина прозрачной текстуры бойца
 
 ///Дескриптор, описывающий границы бойца
 function getFighterBordersDescriptor(centerX) {
     let halfW = halfFighterWidth()
+    
 
     let leftX = centerX - halfW
     let rightX = centerX + halfW
+
+    //видимая часть текстуры бойца
+    let visibleLeftX = leftX + visualGape
+    let visibleRightX = rightX - visualGape
+
     let descriptor = {
         centerX: centerX,
         leftX: leftX,
-        rightX: rightX
+        rightX: rightX,
+        visibleLeftX: visibleLeftX,
+        visibleRightX: visibleRightX
     }
 
     return descriptor
@@ -543,28 +552,28 @@ function constrainFighterInScene(X, byX) {
 }
 
 
-///Ограничение координат бойцов
+///Ограничение координат бойцов друг другом
 function constrainFighterBeyoundOpponent(movingFighterDescriptor, by, stayingFighterDescriptor) {
     //проверка на вхождение в границы другого бойца
-    let finalMovingLeftX = movingFighterDescriptor.leftX + by
-    let finalMovingRightX = movingFighterDescriptor.rightX + by
+    let finalVisibleLeftX = movingFighterDescriptor.visibleLeftX + by
+    let finalVisibleRightX = movingFighterDescriptor.visibleRightX + by
+
+    var newMovingFighterDescriptor = movingFighterDescriptor
 
     if (movingFighterDescriptor.centerX <= stayingFighterDescriptor.centerX) {
-        if (finalMovingRightX > stayingFighterDescriptor.leftX) {
-            movingFighterDescriptor.rightX = stayingFighterDescriptor.leftX
-            movingFighterDescriptor.centerX = movingFighterDescriptor.rightX - fighterWidth / 2
-            movingFighterDescriptor.leftX = movingFighterDescriptor.rightX - fighterWidth
+        if (finalVisibleRightX > stayingFighterDescriptor.visibleLeftX) {
+            let newCenterX = stayingFighterDescriptor.visibleLeftX - halfFighterWidth()
+            newMovingFighterDescriptor = getFighterBordersDescriptor(newCenterX)
         }
     }
     else {
-        if (finalMovingLeftX < stayingFighterDescriptor.rightX) {
-            movingFighterDescriptor.leftX = stayingFighterDescriptor.rightX
-            movingFighterDescriptor.centerX = movingFighterDescriptor.leftX + fighterWidth / 2
-            movingFighterDescriptor.rightX = movingFighterDescriptor.leftX + fighterWidth
+        if (finalVisibleLeftX < stayingFighterDescriptor.visibleRightX) {
+            let newCenterX = stayingFighterDescriptor.visibleRightX + halfFighterWidth()
+            newMovingFighterDescriptor = getFighterBordersDescriptor(newCenterX)
         }
     }
 
-    return movingFighterDescriptor
+    return newMovingFighterDescriptor
 }
 
 
