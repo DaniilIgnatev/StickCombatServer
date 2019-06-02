@@ -247,7 +247,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby, lobbyName) {
         var fighter1 = {
             id: 0,
             x: -130.0,
-            y: 0.0,
+            y: 12.0,
             isOn: false,
             hp: 100,
             nickname: nickname
@@ -256,7 +256,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby, lobbyName) {
         var fighter2 = {
             id: 1,
             x: 130.0,
-            y: 0.0,
+            y: 12.0,
             isOn: false,
             hp: 100,
             nickname: undefined
@@ -284,6 +284,7 @@ function HandleRequest_CreateLobby(parsed, connection, lobby, lobbyName) {
 
 ///Обработка запроса на присоединение к лобби
 function HandleRequest_JoinLobby(parsed, connection, lobby) {
+    //сделать поиск лобби тут, не принимать лобби из вне
     if (parsed.head.type == "joinLobby") {
         if (lobby == undefined) {
             return ComposeAnswer_Status(LobbyStatusEnum.refused)
