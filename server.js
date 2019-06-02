@@ -219,7 +219,7 @@ const sceneLeftBorder = -333.5
 const sceneRightBorder = 333.5
 
 ///Ширина прозрачной текстуры бойца
-const visualGape = halfFighterWidth() / 1.7
+const visualGape = halfFighterWidth() / 2.2
 
 ///Возвращает дескриптор бойца по его id и lobby
 function fighterDescriptor(id, lobby) {
