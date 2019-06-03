@@ -160,7 +160,7 @@ wsServer.on('request', function (request) {
                     processGameAction(lobby.Socket1, lobby.Socket2, HandleRequest_Status, csRequest, lobby)
 
                     //распечатка информации о лобби (дебаг)
-                    printLobbyStatus(lobby)
+                    //printLobbyStatus(lobby)
                 }
             }
         }
