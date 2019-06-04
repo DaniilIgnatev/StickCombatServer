@@ -190,6 +190,7 @@ function processJoinLobbyAction(connection, joinLobbyHandler, requestJSON) {
                 }
                 else {
                     //Лобби не прошло проверку на целостность данных, удаляем
+                    //lobby.Socket1 = undefined при потери связи с клиентом из-за отсутствия интернета
                     wipeOffLobby(lobby)
                     wipeOffConnectionDescriptor(connection.id)
                 }
